@@ -7,7 +7,7 @@ use File::Copy qw(copy);
 use Carp;
 
 use vars qw( $VERSION @ISA );
-$VERSION = '1.09';
+$VERSION = '1.10';
 @ISA = qw(Exporter);
 
 use constant HAS_SYMLINKS => ($^O !~ /Win32/i) || 0;
@@ -353,7 +353,7 @@ __END__
 
 File::DirSync - Syncronize two directories rapidly
 
-$Id: DirSync.pm,v 1.14 2003/04/16 20:48:03 rob Exp $
+$Id: DirSync.pm,v 1.15 2003/04/28 20:32:27 rob Exp $
 
 =head1 SYNOPSIS
 
