@@ -1,7 +1,7 @@
 #
-# Author:   Rob Brown <rob@roobik.com>
+# Author:   Rob Brown <bbb@cpan.org>
 # Created:  05 Dec 2001
-# $Id: Makefile.PL,v 1.5 2002/07/09 22:45:58 rob Exp $
+# $Id: Makefile.PL,v 1.6 2002/07/31 16:13:08 rob Exp $
 
 use ExtUtils::MakeMaker;
 WriteMakefile

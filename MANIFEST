@@ -1,7 +1,7 @@
 MANIFEST
 Makefile.PL
 README
-CHANGES
+Changes
 dirsync
 File-DirSync.spec
 File-DirSync.spec.PL

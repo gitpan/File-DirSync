@@ -7,8 +7,10 @@ use File::Copy qw(copy);
 use Carp;
 
 use vars qw( $VERSION @ISA );
-$VERSION = '1.05';
+$VERSION = '1.06';
 @ISA = qw(Exporter);
+
+use constant HAS_SYMLINKS => ($^O !~ /Win32/i) || 0;
 
 sub new {
   my $class = shift;
@@ -110,39 +112,41 @@ sub _dirsync {
   my $when_src = (lstat $src)[9];
   my $size_src = -s _;
 
-  # Symlink Check must be first because
-  # I could not figure out how to preserve
-  # timestamps (without root privileges).
-  if (-l _) {
-    # Source is a symlink
-    my $point = readlink($src);
-    if (-l $dst) {
-      # Dest is a symlink, too
-      if ($point eq (readlink $dst)) {
-        # Symlinks match, nothing to do.
-        return;
+  if (HAS_SYMLINKS) {
+    # Symlink Check must be first because
+    # I could not figure out how to preserve
+    # timestamps (without root privileges).
+    if (-l _) {
+      # Source is a symlink
+      my $point = readlink($src);
+      if (-l $dst) {
+        # Dest is a symlink, too
+        if ($point eq (readlink $dst)) {
+          # Symlinks match, nothing to do.
+          return;
+        }
+        # Remove incorrect symlink
+        print "$dst: Removing symlink\n" if $self->{verbose};
+        unlink($dst) || warn "$dst: Failed to remove symlink: $!\n";
       }
-      # Remove incorrect symlink
-      print "$dst: Removing symlink\n" if $self->{verbose};
-      unlink($dst) || warn "$dst: Failed to remove symlink: $!\n";
+      if (-d $dst) {
+        # Wipe directory
+        print "$dst: Removing tree\n" if $self->{verbose};
+        rmtree($dst) || warn "$dst: Failed to rmtree: $!\n";
+      } elsif (-e $dst) {
+        # Regular file (or something else) needs to go
+        print "$dst: Removing\n" if $self->{verbose};
+        unlink($dst) || warn "$dst: Failed to purge: $!\n";
+      }
+      if (-l $dst || -e $dst) {
+        warn "$dst: Still exists after wipe?!!!\n";
+      }
+      $point = $1 if $point =~ /^(.+)$/; # Taint
+      # Point to the same place that $src points to
+      print "$dst -> $point\n" if $self->{verbose};
+      symlink($point, $dst) || warn "$dst: Failed to create symlink: $!\n";
+      return;
     }
-    if (-d $dst) {
-      # Wipe directory
-      print "$dst: Removing tree\n" if $self->{verbose};
-      rmtree($dst) || warn "$dst: Failed to rmtree: $!\n";
-    } elsif (-e $dst) {
-      # Regular file (or something else) needs to go
-      print "$dst: Removing\n" if $self->{verbose};
-      unlink($dst) || warn "$dst: Failed to purge: $!\n";
-    }
-    if (-l $dst || -e $dst) {
-      warn "$dst: Still exists after wipe?!!!\n";
-    }
-    $point = $1 if $point =~ /^(.+)$/; # Taint
-    # Point to the same place that $src points to
-    print "$dst -> $point\n" if $self->{verbose};
-    symlink($point, $dst) || warn "$dst: Failed to create symlink: $!\n";
-    return;
   }
 
   if ($self->{nocache} && -d _) {
@@ -337,7 +341,7 @@ __END__
 
 File::DirSync - Syncronize two directories rapidly
 
-$Id: DirSync.pm,v 1.3 2002/07/09 22:57:17 rob Exp $
+$Id: DirSync.pm,v 1.6 2002/07/31 15:54:28 rob Exp $
 
 =head1 SYNOPSIS
 
@@ -535,7 +539,7 @@ new version may not be updated to the destination.  The source will
 need to be modified again or at least the timestamp changed after
 the entire second has passed by.  A quick touch should do the trick.
 
-It does not update timestamps on symlinks, because I could not
+It does not update timestamps on symlinks, because I couldn't
 figure out how to do it without dinking with the system clock. :-/
 If anyone knows a better way, just let the author know.
 

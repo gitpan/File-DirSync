@@ -1,4 +1,4 @@
-#!/apps/perl5/bin/perl -w
+#!/apps/perl5/bin/perl -T -w
 
 use strict;
 use Getopt::Long qw(GetOptions);
@@ -88,7 +88,7 @@ __END__
 
 dirsync - Syncronize two directories rapidly
 
-$Id: dirsync,v 1.7 2001/12/12 19:09:21 rob Exp $
+$Id: dirsync,v 1.9 2002/07/31 16:13:08 rob Exp $
 
 =head1 SYNOPSIS
 
@@ -171,7 +171,7 @@ Show extra details.
 
 =head1 AUTHOR
 
-Rob Brown, rob@roobik.com
+Rob Brown, bbb@cpan.org
 
 =head1 COPYRIGHT
 

@@ -111,7 +111,7 @@ rm -rf $HERE
 %{_prefix}
 
 %changelog
-* Wed May 24 2002 Rob Brown <rob@roobik.com>
+* Wed May 24 2002 Rob Brown <bbb@cpan.org>
 - More generalizations
-* Wed Dec 12 2001 Rob Brown <rob@roobik.com>
+* Wed Dec 12 2001 Rob Brown <bbb@cpan.org>
 - initial creation

@@ -9,8 +9,8 @@ END { ok $loaded;}
 
 # Just make sure everything compiles
 $exefile = "dirsync";
-system("$^X -c $exefile 2>/dev/null") &&
-  die "Compilation failure: ".`$^X -c $exefile`;
+system("$^X -Iblib/lib -T -c $exefile 2>/dev/null") &&
+  die "Compilation failure: ".`$^X -Iblib/lib -T -c $exefile`;
 
 $loaded = 1;
 
