@@ -7,7 +7,7 @@ use File::Copy qw(copy);
 use Carp;
 
 use vars qw( $VERSION @ISA );
-$VERSION = '1.11';
+$VERSION = '1.12';
 @ISA = qw(Exporter);
 
 use constant HAS_SYMLINKS => ($^O !~ /Win32/i) || 0;
@@ -16,6 +16,7 @@ sub new {
   my $class = shift;
   my $self = shift || {};
   $self->{only} ||= [];
+  $| = 1 if $self->{verbose};
   bless $self, $class;
   return $self;
 }
@@ -101,10 +102,12 @@ sub dirsync {
   if ($upper_dst && !-d $upper_dst) {
     croak "Destination root [$upper_dst] must exist: Aborting dirsync";
   }
-  $self->{_tracking} = { removed => [],
-                         updated => [],
-                         skipped => [],
-                         failed  => [] };
+  $self->{_tracking} = {
+    removed => [],
+    updated => [],
+    skipped => [],
+    failed  => [],
+  };
   return $self->_dirsync( $src, $dst );
 }
 
@@ -212,8 +215,7 @@ sub _dirsync {
     print "$dst: Removing\n" if $self->{verbose};
     if ( rmtree($dst) ) {
       push @{ $self->{_tracking}{removed} }, $dst;
-    }
-    else {
+    } else {
       push @{ $self->{_tracking}{failed} }, $dst;
       warn "$dst: Failed to rmtree: $!\n";
     }
@@ -233,18 +235,16 @@ sub _dirsync {
       # It must be wiped
       print "$dst: Removing file\n" if $self->{verbose};
       if ( unlink($dst) ) {
-          push @{ $self->{_tracking}{removed} }, $dst;
-      }
-      else {
-          push @{ $self->{_tracking}{failed} }, $dst;
-          warn "$dst: Failed to remove file: $!\n";
+        push @{ $self->{_tracking}{removed} }, $dst;
+      } else {
+        push @{ $self->{_tracking}{failed} }, $dst;
+        warn "$dst: Failed to remove file: $!\n";
       }
     }
     if (!-d $dst) {
       if ( mkdir($dst, 0755) ) {
         push @{ $self->{_tracking}{updated} }, $dst;
-      }
-      else {
+      } else {
         push @{ $self->{_tracking}{failed} }, $dst;
         warn "$dst: Failed to create: $!\n";
       }
@@ -260,11 +260,11 @@ sub _dirsync {
       # because rebuild() will ensure that the directory
       # timestamp is the most recent within its
       # entire descent.
-        if ( defined ( $when_src && $when_dst) &&
-             $when_src == $when_dst ) {
-          push @{ $self->{_tracking}{skipped} }, $dst;
-          return;
-        }
+      if ( defined ( $when_src && $when_dst) &&
+           $when_src == $when_dst ) {
+        push @{ $self->{_tracking}{skipped} }, $dst;
+        return;
+      }
     }
 
     print "$dst: Scanning...\n" if $self->{verbose};
@@ -307,8 +307,9 @@ sub _dirsync {
     foreach $node (keys %nodes) {
       $self->_dirsync("$src/$node", "$dst/$node");
     }
+    # Force permissions to match the source
+    chmod( (stat $src)[2] & 0777, $dst) || warn "$dst: Failed to chmod: $!\n";
     # Force user and group ownership to match the source
-    # add to 'tracking.failed' here?
     chown ( (stat $src)[4], (stat _)[5], $dst) || warn "$dst: Failed to chown: $!\n";
     # Force timestamp to match the source.
     utime($when_src, $when_src, $dst) || warn "$dst: Failed to utime: $!\n";
@@ -378,27 +379,27 @@ sub nocache {
 
 
 sub entries_updated {
-    my $self = shift;
-    return () unless ( ref $self->{_tracking} eq 'HASH' );
-    return @{ $self->{_tracking}{updated} };
+  my $self = shift;
+  return () unless ( ref $self->{_tracking} eq 'HASH' );
+  return @{ $self->{_tracking}{updated} };
 }
 
 sub entries_removed {
-    my $self = shift;
-    return () unless ( ref $self->{_tracking} eq 'HASH' );
-    return @{ $self->{_tracking}{removed} };
+  my $self = shift;
+  return () unless ( ref $self->{_tracking} eq 'HASH' );
+  return @{ $self->{_tracking}{removed} };
 }
 
 sub entries_skipped {
-    my $self = shift;
-    return () unless ( ref $self->{_tracking} eq 'HASH' );
-    return @{ $self->{_tracking}{skipped} };
+  my $self = shift;
+  return () unless ( ref $self->{_tracking} eq 'HASH' );
+  return @{ $self->{_tracking}{skipped} };
 }
 
 sub entries_failed {
-    my $self = shift;
-    return () unless ( ref $self->{_tracking} eq 'HASH' );
-    return @{ $self->{_tracking}{failed} };
+  my $self = shift;
+  return () unless ( ref $self->{_tracking} eq 'HASH' );
+  return @{ $self->{_tracking}{failed} };
 }
 
 1;
@@ -408,7 +409,7 @@ __END__
 
 File::DirSync - Syncronize two directories rapidly
 
-$Id: DirSync.pm,v 1.17 2003/07/03 23:27:18 rob Exp $
+$Id: DirSync.pm,v 1.22 2003/11/13 18:46:46 rob Exp $
 
 =head1 SYNOPSIS
 
@@ -697,6 +698,7 @@ terms as Perl itself.
 
 =head1 SEE ALSO
 
+L<dirsync(1)>,
 L<File::Copy(3)>,
 L<perl(1)>
 

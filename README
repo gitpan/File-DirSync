@@ -1,7 +1,7 @@
 NAME
     File::DirSync - Syncronize two directories rapidly
 
-    $Id: DirSync.pm,v 1.17 2003/07/03 23:27:18 rob Exp $
+    $Id: DirSync.pm,v 1.22 2003/11/13 18:46:46 rob Exp $
 
 SYNOPSIS
       use File::DirSync;
@@ -270,5 +270,5 @@ COPYRIGHT
     Perl itself.
 
 SEE ALSO
-    the File::Copy(3) manpage, the perl(1) manpage
+    the dirsync(1) manpage, the File::Copy(3) manpage, the perl(1) manpage
 
