@@ -1,5 +1,11 @@
 Revision history for Perl extension File::DirSync.
 
+1.03  Tue Dec 12 09:42:00 2001
+	- Documentation changes.
+	- Added man page for dirsync.
+	- Added File-DirSync.spec for easy rpm creation:
+	  $ rpm -ta File-DirSync-*.tar.gz
+
 1.02  Tue Dec 11 09:42:00 2001
 	- Initial release to CPAN
 	- Ported from standalone script to a

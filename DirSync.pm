@@ -7,7 +7,7 @@ use File::Copy qw(copy);
 use Carp;
 
 use vars qw( $VERSION @ISA );
-$VERSION = '1.02';
+$VERSION = '1.03';
 @ISA = qw(Exporter);
 
 sub new {
@@ -336,7 +336,7 @@ __END__
 
 File::DirSync - Syncronize two directories rapidly
 
-$Id: DirSync.pm,v 1.11 2001/12/11 16:42:38 rob Exp $
+$Id: DirSync.pm,v 1.12 2001/12/12 19:37:50 rob Exp $
 
 =head1 SYNOPSIS
 
@@ -418,7 +418,7 @@ with the actual files, or it may take an unusually long time.
 Copy everything from <source_directory> to <destination_directory>.
 Files and directories within <destination_directory> that do not
 exist in <source_directory> will be removed.  New nodes put within
-<source_directory> since the last dirsycn() will be mirrored to
+<source_directory> since the last dirsync() will be mirrored to
 <destination_directory> retaining permission modes and timestamps.
 Write access to <destination_directory> is required.
 Read-only access to <source_directory> is sufficient.
@@ -430,7 +430,7 @@ prior to using dirsync() for maximum efficiency.  If not, then use
 the nocache() setting to force dirsync() to mirror the entire
 <source_directory> regardless of the dirsync source cache.
 
-=head2 only( <source> )
+=head2 only( <source> [, <source> ...] )
 
 If you are sure nothing has changed within source_directory
 except for <source>, you can specify a file or directory
@@ -439,13 +439,13 @@ using this method.
   $dirsync->only( "$from/htdocs" );
 
 However, the cache will still be built all the way up to the
-source_directory.  This only node must always be a subdirectory
-or a file within source_dir.  This option only applies to the
-rebuild() method and is ignored for the dirsync() method.  This
-method may be used multiple times to rebuild several nodes.
-If this method is not called before rebuild() is, then the
-entire directory structure of source_directory and its descent
-will be rebuilt.
+source_directory.  This only() node must always be a subdirectory
+or a file within source_directory.  This option only applies to
+the rebuild() method and is ignored for the dirsync() method.
+This method may be used multiple times to rebuild several nodes.
+It may also be passed a list of nodes.  If this method is not
+called before rebuild() is, then the entire directory structure
+of source_directory and its descent will be rebuilt.
 
 =head2 ignore( <node> )
 
@@ -551,7 +551,7 @@ terms as Perl itself.
 
 =head1 SEE ALSO
 
-L<File::Copy>,
-L<perl>
+L<File::Copy(3)>,
+L<perl(1)>
 
 =cut

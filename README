@@ -1,7 +1,7 @@
 NAME
     File::DirSync - Syncronize two directories rapidly
 
-    $Id: DirSync.pm,v 1.11 2001/12/11 16:42:38 rob Exp $
+    $Id: DirSync.pm,v 1.12 2001/12/12 19:37:50 rob Exp $
 
 SYNOPSIS
       use File::DirSync;
@@ -80,7 +80,7 @@ METHODS
     Copy everything from <source_directory> to <destination_directory>.
     Files and directories within <destination_directory> that do not exist
     in <source_directory> will be removed. New nodes put within
-    <source_directory> since the last dirsycn() will be mirrored to
+    <source_directory> since the last dirsync() will be mirrored to
     <destination_directory> retaining permission modes and timestamps. Write
     access to <destination_directory> is required. Read-only access to
     <source_directory> is sufficient.
@@ -92,7 +92,7 @@ METHODS
     setting to force dirsync() to mirror the entire <source_directory>
     regardless of the dirsync source cache.
 
-  only( <source> )
+  only( <source> [, <source> ...] )
 
     If you are sure nothing has changed within source_directory except for
     <source>, you can specify a file or directory using this method.
@@ -100,12 +100,12 @@ METHODS
       $dirsync->only( "$from/htdocs" );
 
     However, the cache will still be built all the way up to the
-    source_directory. This only node must always be a subdirectory or a file
-    within source_dir. This option only applies to the rebuild() method and
-    is ignored for the dirsync() method. This method may be used multiple
-    times to rebuild several nodes. If this method is not called before
-    rebuild() is, then the entire directory structure of source_directory
-    and its descent will be rebuilt.
+    source_directory. This only() node must always be a subdirectory or a
+    file within source_directory. This option only applies to the rebuild()
+    method and is ignored for the dirsync() method. This method may be used
+    multiple times to rebuild several nodes. It may also be passed a list of
+    nodes. If this method is not called before rebuild() is, then the entire
+    directory structure of source_directory and its descent will be rebuilt.
 
   ignore( <node> )
 
@@ -198,5 +198,5 @@ COPYRIGHT
     Perl itself.
 
 SEE ALSO
-    the File::Copy manpage, the perl manpage
+    the File::Copy(3) manpage, the perl(1) manpage
 

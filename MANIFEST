@@ -3,5 +3,7 @@ dirsync
 CHANGES
 README
 MANIFEST
+File-DirSync.spec
+File-DirSync.spec.PL
 Makefile.PL
 t/100_load.t
