@@ -7,7 +7,7 @@ use File::Copy qw(copy);
 use Carp;
 
 use vars qw( $VERSION @ISA );
-$VERSION = '1.10';
+$VERSION = '1.11';
 @ISA = qw(Exporter);
 
 use constant HAS_SYMLINKS => ($^O !~ /Win32/i) || 0;
@@ -101,6 +101,10 @@ sub dirsync {
   if ($upper_dst && !-d $upper_dst) {
     croak "Destination root [$upper_dst] must exist: Aborting dirsync";
   }
+  $self->{_tracking} = { removed => [],
+                         updated => [],
+                         skipped => [],
+                         failed  => [] };
   return $self->_dirsync( $src, $dst );
 }
 
@@ -156,9 +160,12 @@ sub _dirsync {
   }
   # Short circuit and kick out the common case:
   # Nothing to do if the timestamp and size match
-  return if defined
-    ( $when_src && $when_dst && $size_src && $size_dst) &&
-      $when_src == $when_dst && $size_src == $size_dst;
+  if ( defined
+       ( $when_src && $when_dst && $size_src && $size_dst) &&
+       $when_src == $when_dst && $size_src == $size_dst ) {
+    push @{ $self->{_tracking}{skipped} }, $dst;
+    return;
+  }
 
   # Regular File Check
   if (-f _) {
@@ -177,6 +184,7 @@ sub _dirsync {
     if (copy($src, $temp_dst)) {
       if (rename $temp_dst, $dst) {
         print "$dst: Updated\n" if $self->{verbose};
+        push @{ $self->{_tracking}{updated} }, $dst;
       } else {
         warn "$dst: Failed to create: $!\n";
       }
@@ -185,6 +193,7 @@ sub _dirsync {
     }
     if (!-e $dst) {
       warn "$dst: Never created?!!!\n";
+      push @{ $self->{_tracking}{failed} }, $dst;
       return;
     }
     # Force permissions to match the source
@@ -201,7 +210,13 @@ sub _dirsync {
     # The source does not exist
     # The destination must also not exist
     print "$dst: Removing\n" if $self->{verbose};
-    rmtree($dst) || warn "$dst: Failed to rmtree: $!\n";
+    if ( rmtree($dst) ) {
+      push @{ $self->{_tracking}{removed} }, $dst;
+    }
+    else {
+      push @{ $self->{_tracking}{failed} }, $dst;
+      warn "$dst: Failed to rmtree: $!\n";
+    }
     return;
   }
 
@@ -217,10 +232,22 @@ sub _dirsync {
       # Dest is a plain file
       # It must be wiped
       print "$dst: Removing file\n" if $self->{verbose};
-      unlink($dst) || warn "$dst: Failed to remove file: $!\n";
+      if ( unlink($dst) ) {
+          push @{ $self->{_tracking}{removed} }, $dst;
+      }
+      else {
+          push @{ $self->{_tracking}{failed} }, $dst;
+          warn "$dst: Failed to remove file: $!\n";
+      }
     }
     if (!-d $dst) {
-      mkdir($dst, 0755) || warn "$dst: Failed to create: $!\n";
+      if ( mkdir($dst, 0755) ) {
+        push @{ $self->{_tracking}{updated} }, $dst;
+      }
+      else {
+        push @{ $self->{_tracking}{failed} }, $dst;
+        warn "$dst: Failed to create: $!\n";
+      }
     }
     if (!-d $dst) {
       warn "$dst: Destination directory cannot exist?!!!\n";
@@ -233,9 +260,11 @@ sub _dirsync {
       # because rebuild() will ensure that the directory
       # timestamp is the most recent within its
       # entire descent.
-      return if defined
-        ( $when_src && $when_dst) &&
-          $when_src == $when_dst;
+        if ( defined ( $when_src && $when_dst) &&
+             $when_src == $when_dst ) {
+          push @{ $self->{_tracking}{skipped} }, $dst;
+          return;
+        }
     }
 
     print "$dst: Scanning...\n" if $self->{verbose};
@@ -279,6 +308,7 @@ sub _dirsync {
       $self->_dirsync("$src/$node", "$dst/$node");
     }
     # Force user and group ownership to match the source
+    # add to 'tracking.failed' here?
     chown ( (stat $src)[4], (stat _)[5], $dst) || warn "$dst: Failed to chown: $!\n";
     # Force timestamp to match the source.
     utime($when_src, $when_src, $dst) || warn "$dst: Failed to utime: $!\n";
@@ -346,6 +376,31 @@ sub nocache {
   return $self->{nocache};
 }
 
+
+sub entries_updated {
+    my $self = shift;
+    return () unless ( ref $self->{_tracking} eq 'HASH' );
+    return @{ $self->{_tracking}{updated} };
+}
+
+sub entries_removed {
+    my $self = shift;
+    return () unless ( ref $self->{_tracking} eq 'HASH' );
+    return @{ $self->{_tracking}{removed} };
+}
+
+sub entries_skipped {
+    my $self = shift;
+    return () unless ( ref $self->{_tracking} eq 'HASH' );
+    return @{ $self->{_tracking}{skipped} };
+}
+
+sub entries_failed {
+    my $self = shift;
+    return () unless ( ref $self->{_tracking} eq 'HASH' );
+    return @{ $self->{_tracking}{failed} };
+}
+
 1;
 __END__
 
@@ -353,7 +408,7 @@ __END__
 
 File::DirSync - Syncronize two directories rapidly
 
-$Id: DirSync.pm,v 1.15 2003/04/28 20:32:27 rob Exp $
+$Id: DirSync.pm,v 1.17 2003/07/03 23:27:18 rob Exp $
 
 =head1 SYNOPSIS
 
@@ -543,6 +598,27 @@ mirrored.
 If enabled, it will significantly degrade the performance
 of the mirroring process.  The default is 0 - assume that
 rebuild() has already rebuilt the source cache.
+
+=head2 entries_updated()
+
+Returns an array of all directories and files updated in the last
+C<dirsync>, an empty list if it hasn't been run yet.
+
+=head2 entries_removed()
+
+Returns an array of all directories and files removed in the last
+C<dirsync>, an empty list if it hasn't been run yet.
+
+=head2 entries_skipped()
+
+Returns an array of all directories and files that were skipped in the
+last C<dirsync>, an empty list if it hasn't been run yet.
+
+=head2 entries_failed()
+
+Returns an array of all directories and files that failed in the last
+C<dirsync>, an empty list if it hasn't been run yet.
+
 
 =head1 TODO
 

@@ -1,5 +1,9 @@
 Revision history for Perl extension File::DirSync.
 
+1.11  Thu Jul 03 18:00:00 2003
+	- Add methods for tracking purposes
+	  Patch by chris@cwinters.com (Chris Winters)
+
 1.10  Mon Apr 28 15:00:00 2003
 	- Okay, it's too hard to taint everything.
 	- At least now it functions.

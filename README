@@ -1,7 +1,7 @@
 NAME
     File::DirSync - Syncronize two directories rapidly
 
-    $Id: DirSync.pm,v 1.15 2003/04/28 20:32:27 rob Exp $
+    $Id: DirSync.pm,v 1.17 2003/07/03 23:27:18 rob Exp $
 
 SYNOPSIS
       use File::DirSync;
@@ -177,6 +177,26 @@ METHODS
     If enabled, it will significantly degrade the performance of the
     mirroring process. The default is 0 - assume that rebuild() has already
     rebuilt the source cache.
+
+  entries_updated()
+
+    Returns an array of all directories and files updated in the last
+    "dirsync", an empty list if it hasn't been run yet.
+
+  entries_removed()
+
+    Returns an array of all directories and files removed in the last
+    "dirsync", an empty list if it hasn't been run yet.
+
+  entries_skipped()
+
+    Returns an array of all directories and files that were skipped in the
+    last "dirsync", an empty list if it hasn't been run yet.
+
+  entries_failed()
+
+    Returns an array of all directories and files that failed in the last
+    "dirsync", an empty list if it hasn't been run yet.
 
 TODO
     Generalized file manipulation routines to allow for easier integration
