@@ -1,5 +1,8 @@
 Revision history for Perl extension File::DirSync.
 
+1.08  Sat Apr 12 23:45:00 2003
+	- More taint clean fixes for security reasons.
+
 1.07  Thu Oct 03 10:00:00 2002
 	- More tests to the suite.
 	- Add src() and dst() methods.

@@ -78,8 +78,10 @@ sub usage {
     print STDERR @_;
     sleep 2;
   }
-  exec "perldoc $0"
-    || exit 1;
+  my $me = $1 if $0 =~ m%^([\w\.\-/]+)$%;
+  $ENV{PATH} = "/bin:/usr/bin:/usr/local/bin";
+  exec perldoc => $me
+    or exit 1;
 }
 
 __END__
@@ -88,7 +90,7 @@ __END__
 
 dirsync - Syncronize two directories rapidly
 
-$Id: dirsync,v 1.9 2002/07/31 16:13:08 rob Exp $
+$Id: dirsync,v 1.10 2003/04/13 05:42:29 rob Exp $
 
 =head1 SYNOPSIS
 

@@ -7,7 +7,7 @@ use File::Copy qw(copy);
 use Carp;
 
 use vars qw( $VERSION @ISA );
-$VERSION = '1.07';
+$VERSION = '1.08';
 @ISA = qw(Exporter);
 
 use constant HAS_SYMLINKS => ($^O !~ /Win32/i) || 0;
@@ -56,6 +56,7 @@ sub _rebuild {
 
   # Hack to snab a scoped file handle.
   my $handle = do { local *FH; };
+  $dir = $1 if $dir =~ m%^(.*)$%;
   return unless opendir($handle, $dir);
   my $current = (lstat $dir)[9];
   my $most_current = $current;
@@ -76,6 +77,7 @@ sub _rebuild {
   closedir($handle);
   if ($most_current > $current) {
     print "Adjusting [$dir]...\n" if $self->{verbose};
+    $most_current = $1 if $most_current =~ /^(\d+)$/;
     utime($most_current, $most_current, $dir);
   }
   return;
@@ -351,7 +353,7 @@ __END__
 
 File::DirSync - Syncronize two directories rapidly
 
-$Id: DirSync.pm,v 1.10 2002/10/23 01:24:18 rob Exp $
+$Id: DirSync.pm,v 1.13 2003/04/13 05:44:51 rob Exp $
 
 =head1 SYNOPSIS
 
@@ -610,7 +612,7 @@ Rob Brown, bbb@cpan.org
 
 =head1 COPYRIGHT
 
-Copyright (C) 2002, Rob Brown, bbb@cpan.org
+Copyright (C) 2002-2003, Rob Brown, bbb@cpan.org
 
 All rights reserved.
 
