@@ -1,0 +1,7 @@
+DirSync.pm
+dirsync
+CHANGES
+README
+MANIFEST
+Makefile.PL
+t/100_load.t
