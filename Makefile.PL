@@ -1,7 +1,7 @@
 #
 # Author:   Rob Brown <bbb@cpan.org>
 # Created:  05 Dec 2001
-# $Id: Makefile.PL,v 1.6 2002/07/31 16:13:08 rob Exp $
+# $Id: Makefile.PL,v 1.7 2002/10/23 01:29:04 rob Exp $
 
 use ExtUtils::MakeMaker;
 WriteMakefile
@@ -12,7 +12,10 @@ WriteMakefile
     "File::Path" => 1,
     "File::Copy" => 1,
   }, # e.g., Module::Name => 1.1
-;
+  dist => {
+    COMPRESS => "gzip -9 -vf",
+  },
+  ;
 
 package MY;
 

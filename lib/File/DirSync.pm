@@ -7,7 +7,7 @@ use File::Copy qw(copy);
 use Carp;
 
 use vars qw( $VERSION @ISA );
-$VERSION = '1.06';
+$VERSION = '1.07';
 @ISA = qw(Exporter);
 
 use constant HAS_SYMLINKS => ($^O !~ /Win32/i) || 0;
@@ -22,9 +22,9 @@ sub new {
 
 sub rebuild {
   my $self = shift;
-  my $dir = shift;
+  my $dir = shift || $self->{src};
 
-  croak 'Source directory must be specified: $obj->rebuild($directory)'
+  croak 'Source directory must be specified: $obj->rebuild($directory) or define $obj->src($directory)'
     unless defined $dir;
 
   # Remove trailing / if accidently supplied
@@ -83,9 +83,9 @@ sub _rebuild {
 
 sub dirsync {
   my $self = shift;
-  my $src = shift;
-  my $dst = shift;
-  croak 'Source and destination directories must be specified: $obj->dirsync($source_directory, $destination_directory)'
+  my $src = shift || $self->{src};
+  my $dst = shift || $self->{dst};
+  croak 'Source and destination directories must be specified: $obj->dirsync($source_directory, $destination_directory) or specify $obj->to($source_directory) and $obj->src($destination_directory)'
     unless (defined $src) && (defined $dst);
 
   # Remove trailing / if accidently supplied
@@ -291,6 +291,16 @@ sub only {
   push (@{ $self->{only} }, @_);
 }
 
+sub dst {
+  my $self = shift;
+  $self->{dst} = shift;
+}
+
+sub src {
+  my $self = shift;
+  $self->{src} = shift;
+}
+
 sub ignore {
   my $self = shift;
   $self->{ignore} ||= {};
@@ -341,7 +351,7 @@ __END__
 
 File::DirSync - Syncronize two directories rapidly
 
-$Id: DirSync.pm,v 1.6 2002/07/31 15:54:28 rob Exp $
+$Id: DirSync.pm,v 1.10 2002/10/23 01:24:18 rob Exp $
 
 =head1 SYNOPSIS
 
@@ -353,13 +363,15 @@ $Id: DirSync.pm,v 1.6 2002/07/31 15:54:28 rob Exp $
     localmode => 1,
   };
 
+  $dirsync->src("/remote/home/www");
+  $dirsync->dst("/home/www");
   $dirsync->ignore("CVS");
 
-  $dirsync->rebuild( $from );
+  $dirsync->rebuild();
 
   #  and / or
 
-  $dirsync->dirsync( $from, $to );
+  $dirsync->dirsync();
 
 =head1 DESCRIPTION
 
@@ -400,13 +412,30 @@ default property hash is as follows:
     verbose => 0,
     nocache => 0,
     localmode => 0,
+    src => undef,
+    dst => undef,
   };
 
-=head2 rebuild( <source_directory> )
+=head2 src( <source_directory> )
+
+Specify the source_directory to be used as the default for
+the rebuild() method if none is specified.  This also sets
+the default source_directory for the dirsync() method if
+none is specified.
+
+=head2 dst( <destination_directory> )
+
+Specify the destination_directory to be used as the default
+for the dirsync() method of none is specified.
+
+=head2 rebuild( [ <source_directory> ] )
 
 In order to run most efficiently, a source cache should be built
 prior to the dirsync process.  That is what this method does.
-Write access to <source_directory> is required.
+If no <source_directory> is specified, you must have already
+set the value through the src() method or by passing it as a
+value to the "src" property to the new() method.  Unfortunately,
+write access to <source_directory> is required for this method.
 
   $dirsync->rebuild( $from );
 
@@ -418,15 +447,19 @@ must be across NFS or other remote protocol, try to avoid
 rebuilding on a machine with much latency from the machine
 with the actual files, or it may take an unusually long time.
 
-=head2 dirsync( <source_directory>, <destination_directory> )
+=head2 dirsync( [ <source_directory> [ , <destination_directory> ] ] )
 
 Copy everything from <source_directory> to <destination_directory>.
+If no <source_directory> or <destination_directory> are specified,
+you must have already set the values through the src() or dst()
+methods or by passing it to the "src" or "dst" properties to new().
 Files and directories within <destination_directory> that do not
 exist in <source_directory> will be removed.  New nodes put within
 <source_directory> since the last dirsync() will be mirrored to
 <destination_directory> retaining permission modes and timestamps.
-Write access to <destination_directory> is required.
-Read-only access to <source_directory> is sufficient.
+Write access to <destination_directory> is required.  Read-only
+access to <source_directory> is sufficient since it will not be
+modifed by this method.
 
   $dirsync->dirsync( $from, $to );
 
@@ -546,6 +579,30 @@ If anyone knows a better way, just let the author know.
 Only plain files, directories, and symlinks are supported at this
 time.  Special files, (including mknod), pipe files, and socket files
 will be ignored.
+
+If a destination node is modified, added, or removed, it is not
+gaurenteed to revert to the source unless its corresponding node
+within the source tree is also modified.  To ensure syncronization
+to a destination that may have been modifed, a rebuild() will also
+need to be performed on the destination tree as well as the source.
+This bug does not apply when using { nocache => 1} however.
+
+Win32 PLATFORM: Removing or renaming a node from the source tree
+does NOT modify the timestamp of the directory containing that node
+for some reason (see test case t/110_behave.t).  Thus, this change
+cannot be detected and stored in the source rebuild() cache.  The
+workaround for renaming a file is to modify the contents of the
+new file in some way or make sure at least the modified timestamp
+gets updated.  The workaround for removing a file, (which also
+works for renaming a file), is to manually update the timestamp
+of the directory where the node used to reside:
+
+  perl -e "utime time,time,q{.}"
+
+Then the rebuild() cache can detect and propagate the changes
+to the destination.  The other workaround is to disable the
+rebuild() cache (nocache => 1) although the dirsync() process
+will generally take longer.
 
 =head1 AUTHOR
 

@@ -1,14 +1,24 @@
 Revision history for Perl extension File::DirSync.
 
+1.07  Thu Oct 03 10:00:00 2002
+	- More tests to the suite.
+	- Add src() and dst() methods.
+	  Patch by gcmccone@raytheon.com (George McCone).
+	- Mention Win32 directory-not-update bug.
+	  Also spotted by George.
+
 1.06  Wed Jul 31 12:00:00 2002
 	- Win32 compatibility changes.
+	  Spot by markmc@tisimaging.com (Mark McConnell).
+	  Also spotted by livshits@cloud9.net (Gene Livshits).
 
 1.05  Thu Jul 18 23:00:00 2002
 	- More standard layout.
 	- Taint cleaner
 
 1.04  Mon Dec 24 11:26:00 2001
-	- Fix destination directory precheck bug (Rhet Turnbull <rhet@turnbull.net>).
+	- Fix destination directory precheck bug.
+	  Spot by rhet@turnbull.net (Rhet Turnbull).
 	- Fix rebuild() bug in the case where only() is never called.
 
 1.03  Tue Dec 12 09:42:00 2001
