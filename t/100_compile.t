@@ -8,9 +8,7 @@ BEGIN { plan tests => 1; $loaded = 0}
 END { ok $loaded;}
 
 # Just make sure everything compiles
-$exefile = "dirsync";
-system("$^X -c $exefile 2>/dev/null") &&
-  die "Compilation failure: ".`$^X -c $exefile`;
+use File::DirSync;
 
 $loaded = 1;
 

@@ -1,16 +1,13 @@
 #
 # Author:   Rob Brown <rob@roobik.com>
 # Created:  05 Dec 2001
-# $Id: Makefile.PL,v 1.3 2001/12/12 19:37:50 rob Exp $
+# $Id: Makefile.PL,v 1.5 2002/07/09 22:45:58 rob Exp $
 
 use ExtUtils::MakeMaker;
 WriteMakefile
   NAME          => 'File::DirSync',
+  VERSION_FROM  => 'lib/File/DirSync.pm', # finds $VERSION
   EXE_FILES     => [ 'dirsync' ],
-  VERSION_FROM  => 'DirSync.pm', # finds $VERSION
-  clean => {
-    FILES => q[*.bak *~ *.spec],
-  },
   PREREQ_PM	  => {
     "File::Path" => 1,
     "File::Copy" => 1,
@@ -18,6 +15,15 @@ WriteMakefile
 ;
 
 package MY;
+
+sub processPL {
+  my $self = shift;
+  my $block = $self->SUPER::processPL(@_);
+  # "Version:" in spec needs to match
+  # "$VERSION" from VERSION_FROM
+  $block =~ s%(spec.PL\s*)$%$1 \$\(VERSION_FROM\)%m;
+  $block;
+}
 
 sub libscan {
   my $self = shift;
@@ -30,7 +36,7 @@ sub postamble {
 
 pm_to_blib: README
 
-README: DirSync.pm
-\tpod2text DirSync.pm >README
-  ^;
+README: \$(VERSION_FROM)
+	pod2text \$(VERSION_FROM) > README
+^;
 }

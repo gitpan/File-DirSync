@@ -7,7 +7,7 @@ use File::Copy qw(copy);
 use Carp;
 
 use vars qw( $VERSION @ISA );
-$VERSION = '1.04';
+$VERSION = '1.05';
 @ISA = qw(Exporter);
 
 sub new {
@@ -138,6 +138,7 @@ sub _dirsync {
     if (-l $dst || -e $dst) {
       warn "$dst: Still exists after wipe?!!!\n";
     }
+    $point = $1 if $point =~ /^(.+)$/; # Taint
     # Point to the same place that $src points to
     print "$dst -> $point\n" if $self->{verbose};
     symlink($point, $dst) || warn "$dst: Failed to create symlink: $!\n";
@@ -336,7 +337,7 @@ __END__
 
 File::DirSync - Syncronize two directories rapidly
 
-$Id: DirSync.pm,v 1.14 2001/12/24 18:47:11 rob Exp $
+$Id: DirSync.pm,v 1.3 2002/07/09 22:57:17 rob Exp $
 
 =head1 SYNOPSIS
 
@@ -516,6 +517,12 @@ Support for Samba style sharing dirsync.
 Support for VFS, HTTP/DAV, and other more standard remote
 third-party file management.
 
+Support for skipping dirsync to avoid wiping the entire
+destination directory when the source directory is empty.
+
+Support for dereferencing symlinks instead of creating
+matching symlinks in the destination.
+
 =head1 BUGS
 
 If the source or destination directory permission settings do not
@@ -538,11 +545,11 @@ will be ignored.
 
 =head1 AUTHOR
 
-Rob Brown, rob@roobik.com
+Rob Brown, bbb@cpan.org
 
 =head1 COPYRIGHT
 
-Copyright (C) 2001, Rob Brown, rob@roobik.com
+Copyright (C) 2002, Rob Brown, bbb@cpan.org
 
 All rights reserved.
 

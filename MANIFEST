@@ -1,9 +1,10 @@
-DirSync.pm
-dirsync
-CHANGES
-README
 MANIFEST
+Makefile.PL
+README
+CHANGES
+dirsync
 File-DirSync.spec
 File-DirSync.spec.PL
-Makefile.PL
+lib/File/DirSync.pm
+t/100_compile.t
 t/100_load.t
