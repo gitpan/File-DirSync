@@ -2,7 +2,7 @@
 %define perlmod File-DirSync
 Summary:	%{perlmod} perl module
 Name:		perl-%{perlmod}
-Version:	1.03
+Version:	1.04
 Release:	1
 License:	GPL
 Group:		Development/Languages/Perl

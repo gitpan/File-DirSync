@@ -7,12 +7,13 @@ use File::Copy qw(copy);
 use Carp;
 
 use vars qw( $VERSION @ISA );
-$VERSION = '1.03';
+$VERSION = '1.04';
 @ISA = qw(Exporter);
 
 sub new {
   my $class = shift;
   my $self = shift || {};
+  $self->{only} ||= [];
   bless $self, $class;
   return $self;
 }
@@ -93,7 +94,7 @@ sub dirsync {
   $dst =~ s%/$%%;
   my $upper_dst = $dst;
   $upper_dst =~ s%/?[^/]+$%%;
-  if ($upper_dst && -d $upper_dst) {
+  if ($upper_dst && !-d $upper_dst) {
     croak "Destination root [$upper_dst] must exist: Aborting dirsync";
   }
   return $self->_dirsync( $src, $dst );
@@ -282,7 +283,6 @@ sub _dirsync {
 
 sub only {
   my $self = shift;
-  $self->{only} ||= [];
   push (@{ $self->{only} }, @_);
 }
 
@@ -336,7 +336,7 @@ __END__
 
 File::DirSync - Syncronize two directories rapidly
 
-$Id: DirSync.pm,v 1.12 2001/12/12 19:37:50 rob Exp $
+$Id: DirSync.pm,v 1.14 2001/12/24 18:47:11 rob Exp $
 
 =head1 SYNOPSIS
 

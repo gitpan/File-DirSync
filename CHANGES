@@ -1,5 +1,9 @@
 Revision history for Perl extension File::DirSync.
 
+1.04  Mon Dec 24 11:26:00 2001
+	- Fix destination directory precheck bug (Rhet Turnbull <rhet@turnbull.net>).
+	- Fix rebuild() bug in the case where only() is never called.
+
 1.03  Tue Dec 12 09:42:00 2001
 	- Documentation changes.
 	- Added man page for dirsync.
