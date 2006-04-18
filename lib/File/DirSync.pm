@@ -7,7 +7,7 @@ use File::Copy qw(copy);
 use Carp;
 
 use vars qw( $VERSION @ISA );
-$VERSION = '1.12';
+$VERSION = '1.13';
 @ISA = qw(Exporter);
 
 use constant HAS_SYMLINKS => ($^O !~ /Win32/i) || 0;
@@ -62,6 +62,12 @@ sub _rebuild {
   my $current = (lstat $dir)[9];
   my $most_current = $current;
   my $node;
+  my $skew = $self->{maxskew};
+  if (defined $skew) {
+    if ($current > $skew) {
+      $most_current = $current = $skew;
+    }
+  }
   while (defined ($node = readdir($handle))) {
     next if $node =~ /^\.\.?$/;
     next if $self->{ignore}->{$node};
@@ -70,6 +76,13 @@ sub _rebuild {
     # are updated before comparing time stamps
     !$self->{localmode} && !-l $path && -d _ && $self->_rebuild( $path );
     my $this_stamp = (lstat $path)[9];
+    if (defined $skew) {
+      if ($this_stamp > $skew and !-l $path) {
+        print "Clock skew detected [$path] ".($this_stamp-$skew)." seconds in the future? Repairing...\n" if $self->{verbose};
+        utime($skew, $skew, $path);
+        $this_stamp = $skew;
+      }
+    }
     if ($this_stamp > $most_current) {
       print "Found a newer node [$path]\n" if $self->{verbose};
       $most_current = $this_stamp;
@@ -324,6 +337,12 @@ sub only {
   push (@{ $self->{only} }, @_);
 }
 
+sub maxskew {
+  my $self = shift;
+  my $maxskew = shift || 0;
+  $self->{maxskew} = time + $maxskew;
+}
+
 sub dst {
   my $self = shift;
   $self->{dst} = shift;
@@ -409,7 +428,7 @@ __END__
 
 File::DirSync - Syncronize two directories rapidly
 
-$Id: DirSync.pm,v 1.22 2003/11/13 18:46:46 rob Exp $
+$Id: DirSync.pm,v 1.24 2006/04/18 22:06:38 rob Exp $
 
 =head1 SYNOPSIS
 
@@ -542,6 +561,20 @@ This method may be used multiple times to rebuild several nodes.
 It may also be passed a list of nodes.  If this method is not
 called before rebuild() is, then the entire directory structure
 of source_directory and its descent will be rebuilt.
+
+=head2 maxskew( [ future_seconds ] )
+
+In order to avoid corrupting directory time stamps into the
+future, you can specify a maximum future_seconds that you will
+permit a node in the <source> directory to be modified.
+
+  $dirsync->maxskew( 7200 );
+
+If the maxskew method is not called, then no corrections to
+the files or directories will be made.  If no argument is
+passed, then future_seconds is assumed to be 0, meaning "now"
+is considered to be the farthest into the future that a file
+should be allowed to be modified.
 
 =head2 ignore( <node> )
 

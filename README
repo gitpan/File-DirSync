@@ -1,7 +1,7 @@
 NAME
     File::DirSync - Syncronize two directories rapidly
 
-    $Id: DirSync.pm,v 1.22 2003/11/13 18:46:46 rob Exp $
+    $Id: DirSync.pm,v 1.24 2006/04/18 22:06:38 rob Exp $
 
 SYNOPSIS
       use File::DirSync;
@@ -128,6 +128,19 @@ METHODS
     multiple times to rebuild several nodes. It may also be passed a list of
     nodes. If this method is not called before rebuild() is, then the entire
     directory structure of source_directory and its descent will be rebuilt.
+
+  maxskew( [ future_seconds ] )
+
+    In order to avoid corrupting directory time stamps into the future, you
+    can specify a maximum future_seconds that you will permit a node in the
+    <source> directory to be modified.
+
+      $dirsync->maxskew( 7200 );
+
+    If the maxskew method is not called, then no corrections to the files or
+    directories will be made. If no argument is passed, then future_seconds
+    is assumed to be 0, meaning "now" is considered to be the farthest into
+    the future that a file should be allowed to be modified.
 
   ignore( <node> )
 
