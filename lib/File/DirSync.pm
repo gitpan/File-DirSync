@@ -7,7 +7,7 @@ use File::Copy qw(copy);
 use Carp;
 
 use vars qw( $VERSION @ISA );
-$VERSION = '1.13';
+$VERSION = '1.14';
 @ISA = qw(Exporter);
 
 use constant HAS_SYMLINKS => ($^O !~ /Win32/i) || 0;
@@ -64,6 +64,7 @@ sub _rebuild {
   my $node;
   my $skew = $self->{maxskew};
   if (defined $skew) {
+    $skew += time;
     if ($current > $skew) {
       $most_current = $current = $skew;
     }
@@ -339,8 +340,7 @@ sub only {
 
 sub maxskew {
   my $self = shift;
-  my $maxskew = shift || 0;
-  $self->{maxskew} = time + $maxskew;
+  $self->{maxskew} = shift || 0;
 }
 
 sub dst {
@@ -428,7 +428,7 @@ __END__
 
 File::DirSync - Syncronize two directories rapidly
 
-$Id: DirSync.pm,v 1.24 2006/04/18 22:06:38 rob Exp $
+$Id: DirSync.pm,v 1.27 2006/04/18 23:55:42 rob Exp $
 
 =head1 SYNOPSIS
 
@@ -693,7 +693,7 @@ time.  Special files, (including mknod), pipe files, and socket files
 will be ignored.
 
 If a destination node is modified, added, or removed, it is not
-gaurenteed to revert to the source unless its corresponding node
+guaranteed to revert to the source unless its corresponding node
 within the source tree is also modified.  To ensure syncronization
 to a destination that may have been modifed, a rebuild() will also
 need to be performed on the destination tree as well as the source.

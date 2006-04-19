@@ -1,5 +1,9 @@
 Revision history for Perl extension File::DirSync.
 
+1.14  Tue Apr 18 17:46:00 2006
+	- Add maxskew feature to avoid cache corruption.
+	- Add t/110_behave.t tester.
+
 1.12  Tue Mar 23 17:00:00 2004
 	- Autoflush STDOUT if verbose is enabled.
 	- Force chmod to match for directories too.

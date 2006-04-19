@@ -1,7 +1,7 @@
 NAME
     File::DirSync - Syncronize two directories rapidly
 
-    $Id: DirSync.pm,v 1.24 2006/04/18 22:06:38 rob Exp $
+    $Id: DirSync.pm,v 1.27 2006/04/18 23:55:42 rob Exp $
 
 SYNOPSIS
       use File::DirSync;
@@ -248,7 +248,7 @@ BUGS
     ignored.
 
     If a destination node is modified, added, or removed, it is not
-    gaurenteed to revert to the source unless its corresponding node within
+    guaranteed to revert to the source unless its corresponding node within
     the source tree is also modified. To ensure syncronization to a
     destination that may have been modifed, a rebuild() will also need to be
     performed on the destination tree as well as the source. This bug does

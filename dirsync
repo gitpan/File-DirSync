@@ -95,7 +95,7 @@ __END__
 
 dirsync - Syncronize two directories rapidly
 
-$Id: dirsync,v 1.13 2003/04/28 20:50:44 rob Exp $
+$Id: dirsync,v 1.14 2006/04/18 23:38:32 rob Exp $
 
 =head1 SYNOPSIS
 
