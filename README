@@ -1,7 +1,7 @@
 NAME
     File::DirSync - Syncronize two directories rapidly
 
-    $Id: DirSync.pm,v 1.27 2006/04/18 23:55:42 rob Exp $
+    $Id: DirSync.pm,v 1.37 2007/08/04 07:29:56 rob Exp $
 
 SYNOPSIS
       use File::DirSync;
@@ -191,6 +191,40 @@ METHODS
     mirroring process. The default is 0 - assume that rebuild() has already
     rebuilt the source cache.
 
+  gentle( [ <percent> [, <ops> ] ] )
+
+    Specify gentleness for all disk operations. This is useful for those
+    servers with very busy disk drives and you need to slow down the sync
+    process in order to allow other processes the io slices they demand. The
+    <percent> is the realtime percentage of time you wish to be sleeping
+    instead of doing anything on the hard drive, i.e., a low value (1) will
+    spend most of the time working and a high value (99) will spend most of
+    the time sleeping. The <ops> is the number of disk operations you wish
+    to perform in between each sleep interval.
+
+      $dirsync->gentle( 25, 1_000 );
+
+    If gentle is called without arguments, then some default "nice" values
+    are set. If gentle is not called at all, then it will process all disk
+    operations at full blast without sleeping at all.
+
+  proctitle( [ procname ] )
+
+    Enable proctitle mode which shows the current operation on the process
+    title. If procname is specified, then it shows that string in the "ps"
+    listing. Otherwise, the current $0 is used. This is mostly for progress
+    tracking for convenience purposes.
+
+      $dirsync->proctitle( "SYNCING" );
+
+    Default is not to alter the process title at all.
+
+  tracking( [ <0_or_1> ] )
+
+    Enable or disable tracking mode. Operation tracking is disabled by
+    default in order to reduce CPU and memory consumption. See entries_*
+    methods below for more details.
+
   entries_updated()
 
     Returns an array of all directories and files updated in the last
@@ -275,7 +309,7 @@ AUTHOR
     Rob Brown, bbb@cpan.org
 
 COPYRIGHT
-    Copyright (C) 2002-2003, Rob Brown, bbb@cpan.org
+    Copyright (C) 2002-2007, Rob Brown, bbb@cpan.org
 
     All rights reserved.
 

@@ -11,6 +11,8 @@ my $verbose = undef;
 my $localmode = undef;
 my $concur  = undef;
 my $skew = undef;
+my $gentle = undef;
+my $proctitle = undef;
 my @ignore  = ();
 my @only    = ();
 
@@ -24,6 +26,8 @@ GetOptions
    "only=s"  => \@only,
    "local"   => \$localmode,
    "concur=s"=> \$concur,
+   "gentle=s"=> \$gentle,
+   proctitle => \$proctitle,
    ) || &usage();
 
 $| = 1 if $verbose;
@@ -42,6 +46,23 @@ if ($concur) {
   $dirsync->lockfile( $concur );
 }
 
+if ($gentle) {
+  my ($percent,$ops) = split /:/, $gentle;
+  if ($percent and $percent =~ /^\d+$/) {
+    if ($ops) {
+      if ($ops !~ /^\d+$/) {
+        usage("Invliad OPS setting for --gentle=[PERCENT:OPS] option.");
+      }
+    } else {
+      $ops = undef;
+    }
+    $dirsync->gentle($percent, $ops);
+  } else {
+    usage("Invalid PERECNT setting for --gentle=[PERCENT:OPS] option.");
+  }
+}
+
+$dirsync->proctitle if $proctitle;
 
 my $dir_from = shift;
 my $dir_to = shift;
@@ -95,7 +116,7 @@ __END__
 
 dirsync - Syncronize two directories rapidly
 
-$Id: dirsync,v 1.14 2006/04/18 23:38:32 rob Exp $
+$Id: dirsync,v 1.15 2007/08/04 07:33:29 rob Exp $
 
 =head1 SYNOPSIS
 
@@ -178,6 +199,21 @@ a time.  If another process is concurrently running,
 this process will immediately abort without doing
 anything.  If <lockfile> does not exist, it will be
 created.
+
+=head2 --gentle <percent>[:<ops>] (or -g=<percent>:<ops>)
+
+If this option is specified, then dirsync will spend
+<percent> % of the time sleeping instead of syncing.
+If <ops> is specified, it will perform <ops> disk
+operations in between each pause cycle.
+If this option is not specified, dirsync will burn
+continually until the process has completed.
+
+=head2 --proctitle (or -p)
+
+If this option is specified, the process name will be
+modified to show the current operation.  This can be
+useful for viewing or monitoring the progress.
 
 =head2 --verbose (or -v)
 

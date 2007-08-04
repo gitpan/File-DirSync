@@ -1,5 +1,24 @@
 Revision history for Perl extension File::DirSync.
 
+1.16  Sat Aug 04 02:00:00 2007
+	- Disable operation tracking by default.
+	- Add a proctitle feature for progress monitioring.
+	- Moved rmtree and copy routines directly into this
+	  module for performance purposes.
+	- Add "gentle" feature to allow dirsync to throttle
+	  back the IO on the disks if this is desired.
+
+1.15  Fri Jul 14 09:58:00 2006
+	- Avoid forcing directory timestamp to match a
+	  more future mtime of a symlink within it.
+	  This allows to cleanly detect and revert any
+	  changes made on the destination by simply
+	  running a rebuild on it (as well as the source)
+	  prior to executing the dirsync operation.
+	  Altering a symlink in any way will ALWAYS
+	  update the mtime of the containing directory
+	  inode, so this is most correct anyway.
+
 1.14  Tue Apr 18 17:46:00 2006
 	- Add maxskew feature to avoid cache corruption.
 	- Add t/110_behave.t tester.

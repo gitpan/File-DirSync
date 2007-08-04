@@ -4,7 +4,7 @@
 use strict;
 use Test;
 
-plan tests => 17;
+plan tests => 32;
 
 # Create a dummy directory
 # 1
@@ -69,8 +69,65 @@ my $m4 = (stat "testdir")[9];
 # 16
 ok $m4;
 
-# Deleting a file should change the timestamp of the directory it used to be it.
+# Deleting a file should change the timestamp of the directory it used to be in.
 # 17
 ok ($m4 > $m3);
+
+# Wait some more...
+# 18
+ok sleep 1;
+# 19
+ok sleep 1;
+
+# Create a symlink
+# 20
+ok symlink("dest", "testdir/symlink");
+
+# Grab timestamp again
+my $m5 = (stat "testdir")[9];
+# 21
+ok $m5;
+
+# Creating a symlink should change the timestamp of its containing directory
+# 22
+ok ($m5 > $m4);
+
+# Wait some more...
+# 23
+ok sleep 1;
+# 24
+ok sleep 1;
+
+# Try renaming the symlink
+# 25
+ok rename("testdir/symlink","testdir/newsymlink");
+
+# Grab timestamp again
+my $m6 = (stat "testdir")[9];
+# 26
+ok $m6;
+
+# Renaming a symlink should change the timestamp of its directory.
+# 27
+ok ($m6 > $m5);
+
+# Wait some more...
+# 28
+ok sleep 1;
+# 29
+ok sleep 1;
+
+# Remove the symlink
+# 30
+ok unlink("testdir/newsymlink");
+
+# Grab timestamp again
+my $m7 = (stat "testdir")[9];
+# 31
+ok $m7;
+
+# Renaming a symlink should change the timestamp of its directory.
+# 32
+ok ($m7 > $m6);
 
 rmdir("testdir");

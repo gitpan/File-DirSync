@@ -2,15 +2,29 @@ package File::DirSync;
 
 use strict;
 use Exporter;
-use File::Path qw(rmtree);
-use File::Copy qw(copy);
-use Carp;
+use Fcntl qw(O_CREAT O_RDONLY O_WRONLY O_EXCL);
+use Carp qw(croak);
 
-use vars qw( $VERSION @ISA );
-$VERSION = '1.14';
+use vars qw( $VERSION @ISA $PROC );
+$VERSION = '1.16';
 @ISA = qw(Exporter);
+$PROC = join " ", $0, @ARGV;
 
+# Whether or not symlinks are supported
 use constant HAS_SYMLINKS => ($^O !~ /Win32/i) || 0;
+
+# Wallclock percent spent sleeping
+use constant GENTLE_PERCENT_DEFAULT => 50;
+use constant GENTLE_PERCENT_MIN     =>  0;
+use constant GENTLE_PERCENT_MAX     => 99;
+
+# Disk Operations to run without sleeping
+use constant GENTLE_OPS_DEFAULT => 10_000;
+use constant GENTLE_OPS_MIN     => 10;
+use constant GENTLE_OPS_MAX     => 2_000_000;
+
+# Number of bytes that can read and write to and from a local file in one syscall
+use constant BUFSIZE => 8192;
 
 sub new {
   my $class = shift;
@@ -19,6 +33,45 @@ sub new {
   $| = 1 if $self->{verbose};
   bless $self, $class;
   return $self;
+}
+
+sub proctitle {
+  my $self = shift;
+  $self->{proctitle} ||= shift || $0;
+  return $self->{proctitle};
+}
+
+sub gentle {
+  my $self = shift;
+
+  $self->{_gentle_percent} = shift || GENTLE_PERCENT_DEFAULT;
+  $self->{_gentle_percent} = GENTLE_PERCENT_MIN if $self->{_gentle_percent} < GENTLE_PERCENT_MIN;
+  $self->{_gentle_percent} = GENTLE_PERCENT_MAX if $self->{_gentle_percent} > GENTLE_PERCENT_MAX;
+
+  $self->{_gentle_maxops} = shift || GENTLE_OPS_DEFAULT;
+  $self->{_gentle_maxops} = GENTLE_OPS_MIN if $self->{_gentle_percent} < GENTLE_OPS_MIN;
+  $self->{_gentle_maxops} = GENTLE_OPS_MAX if $self->{_gentle_percent} > GENTLE_OPS_MAX;
+
+  $self->{_gentle_started} = time;
+  $self->{_gentle_ops} = 0;
+
+  return $self->{_gentle_percent};
+}
+
+sub _op {
+  my $self = shift;
+  if (($self->{_gentle_ops} += (shift || 1) ) => $self->{_gentle_maxops}) {
+    # Reached maximum operations
+    my $now = time();
+    my $elapsed = $now - $self->{_gentle_started};
+    $self->{_gentle_started} = $now;
+    my $delay = int($elapsed * $self->{_gentle_percent} / 100 ) + 1;
+    my $prevproc = $0;
+    $0 = "$self->{proctitle} - gentle: SLEEPING $delay SECONDS UNTIL: ".scalar(localtime (time() + $delay));
+    sleep $delay;
+    $0 = $prevproc;
+  }
+  return 1;
 }
 
 sub rebuild {
@@ -48,6 +101,7 @@ sub rebuild {
   } else {
     $self->_rebuild( $dir );
   }
+  $0 = $PROC if $self->{proctitle};
   print "Rebuild cache complete.\n" if $self->{verbose};
 }
 
@@ -58,7 +112,10 @@ sub _rebuild {
   # Hack to snab a scoped file handle.
   my $handle = do { local *FH; };
   $dir = $1 if $dir =~ m%^(.*)$%;
+  $self->_op if $self->{_gentle_percent};
   return unless opendir($handle, $dir);
+  $0 = "$self->{proctitle} - rebuild: $dir" if $self->{proctitle};
+  $self->_op if $self->{_gentle_percent};
   my $current = (lstat $dir)[9];
   my $most_current = $current;
   my $node;
@@ -69,15 +126,19 @@ sub _rebuild {
       $most_current = $current = $skew;
     }
   }
+  $self->_op if $self->{_gentle_percent};
   while (defined ($node = readdir($handle))) {
     next if $node =~ /^\.\.?$/;
     next if $self->{ignore}->{$node};
     my $path = "$dir/$node";
     # Recurse into directories to make sure they
     # are updated before comparing time stamps
+    $self->_op if $self->{_gentle_percent};
     !$self->{localmode} && !-l $path && -d _ && $self->_rebuild( $path );
     my $this_stamp = (lstat $path)[9];
+    next if -l _;
     if (defined $skew) {
+      $self->_op if $self->{_gentle_percent};
       if ($this_stamp > $skew and !-l $path) {
         print "Clock skew detected [$path] ".($this_stamp-$skew)." seconds in the future? Repairing...\n" if $self->{verbose};
         utime($skew, $skew, $path);
@@ -93,9 +154,27 @@ sub _rebuild {
   if ($most_current > $current) {
     print "Adjusting [$dir]...\n" if $self->{verbose};
     $most_current = $1 if $most_current =~ /^(\d+)$/;
+    $self->_op if $self->{_gentle_percent};
     utime($most_current, $most_current, $dir);
   }
   return;
+}
+
+sub tracking {
+  my $self = shift;
+  if (@_) {
+    if (shift) {
+      $self->{_tracking} = {
+        removed => [],
+        updated => [],
+        skipped => [],
+        failed  => [],
+      };
+    } else {
+      delete $self->{_tracking};
+    }
+  }
+  return ($self->{_tracking} ? 1 : 0);
 }
 
 sub dirsync {
@@ -116,13 +195,9 @@ sub dirsync {
   if ($upper_dst && !-d $upper_dst) {
     croak "Destination root [$upper_dst] must exist: Aborting dirsync";
   }
-  $self->{_tracking} = {
-    removed => [],
-    updated => [],
-    skipped => [],
-    failed  => [],
-  };
-  return $self->_dirsync( $src, $dst );
+  $self->_dirsync( $src, $dst );
+  $0 = $PROC if $self->{proctitle};
+  return;
 }
 
 sub _dirsync {
@@ -130,6 +205,7 @@ sub _dirsync {
   my $src = shift;
   my $dst = shift;
 
+  $self->_op(2) if $self->{_gentle_percent};
   my $when_dst = (lstat $dst)[9];
   my $size_dst = -s _;
   my $when_src = (lstat $src)[9];
@@ -141,25 +217,28 @@ sub _dirsync {
     # timestamps (without root privileges).
     if (-l _) {
       # Source is a symlink
+      $self->_op(2) if $self->{_gentle_percent};
       my $point = readlink($src);
       if (-l $dst) {
         # Dest is a symlink, too
         if ($point eq (readlink $dst)) {
           # Symlinks match, nothing to do.
+          $self->_op if $self->{_gentle_percent};
           return;
         }
         # Remove incorrect symlink
         print "$dst: Removing symlink\n" if $self->{verbose};
-        unlink($dst) || warn "$dst: Failed to remove symlink: $!\n";
+        unlink $dst or warn "$dst: Failed to remove symlink: $!\n";
+        $self->_op(2) if $self->{_gentle_percent};
       }
       if (-d $dst) {
         # Wipe directory
         print "$dst: Removing tree\n" if $self->{verbose};
-        rmtree($dst) || warn "$dst: Failed to rmtree: $!\n";
+        $self->rmtree($dst) or warn "$dst: Failed to rmtree!\n";
       } elsif (-e $dst) {
         # Regular file (or something else) needs to go
         print "$dst: Removing\n" if $self->{verbose};
-        unlink($dst) || warn "$dst: Failed to purge: $!\n";
+        unlink $dst or warn "$dst: Failed to purge: $!\n";
       }
       if (-l $dst || -e $dst) {
         warn "$dst: Still exists after wipe?!!!\n";
@@ -167,7 +246,8 @@ sub _dirsync {
       $point = $1 if $point =~ /^(.+)$/; # Taint
       # Point to the same place that $src points to
       print "$dst -> $point\n" if $self->{verbose};
-      symlink($point, $dst) || warn "$dst: Failed to create symlink: $!\n";
+      symlink $point, $dst or warn "$dst: Failed to create symlink: $!\n";
+      $self->_op(5) if $self->{_gentle_percent};
       return;
     }
   }
@@ -177,10 +257,9 @@ sub _dirsync {
   }
   # Short circuit and kick out the common case:
   # Nothing to do if the timestamp and size match
-  if ( defined
-       ( $when_src && $when_dst && $size_src && $size_dst) &&
+  if ( defined ( $when_src && $when_dst && $size_src && $size_dst) &&
        $when_src == $when_dst && $size_src == $size_dst ) {
-    push @{ $self->{_tracking}{skipped} }, $dst;
+    push @{ $self->{_tracking}->{skipped} }, $dst if $self->{_tracking};
     return;
   }
 
@@ -190,35 +269,34 @@ sub _dirsync {
     if (-l $dst) {
       # Dest is a symlink
       print "$dst: Removing symlink\n" if $self->{verbose};
-      unlink($dst) || warn "$dst: Failed to remove symlink: $!\n";
+      unlink $dst or warn "$dst: Failed to remove symlink: $!\n";
+      $self->_op if $self->{_gentle_percent};
     } elsif (-d _) {
       # Wipe directory
       print "$dst: Removing tree\n" if $self->{verbose};
-      rmtree($dst) || warn "$dst: Failed to rmtree: $!\n";
+      $self->rmtree($dst) or warn "$dst: Failed to rmtree: $!\n";
     }
-    my $temp_dst = $dst;
-    $temp_dst =~ s%/([^/]+)$%/.\#$1.dirsync.tmp%;
-    if (copy($src, $temp_dst)) {
-      if (rename $temp_dst, $dst) {
-        print "$dst: Updated\n" if $self->{verbose};
-        push @{ $self->{_tracking}{updated} }, $dst;
-      } else {
-        warn "$dst: Failed to create: $!\n";
-      }
+    $self->_op if $self->{_gentle_percent};
+    $0 = "$self->{proctitle} - copying: $src => $dst" if $self->{proctitle};
+    if ($self->copy($src, $dst)) {
+      print "$dst: Updated\n" if $self->{verbose};
+      push @{ $self->{_tracking}->{updated} }, $dst if $self->{_tracking};
     } else {
-      warn "$temp_dst: Failed to copy: $!\n";
+      warn "$dst: Failed to copy: $!\n";
     }
     if (!-e $dst) {
       warn "$dst: Never created?!!!\n";
-      push @{ $self->{_tracking}{failed} }, $dst;
+      push @{ $self->{_tracking}->{failed} }, $dst if $self->{_tracking};
+      $self->_op if $self->{_gentle_percent};
       return;
     }
     # Force permissions to match the source
-    chmod( (stat $src)[2] & 0777, $dst) || warn "$dst: Failed to chmod: $!\n";
+    chmod( (stat $src)[2] & 0777, $dst) or warn "$dst: Failed to chmod: $!\n";
     # Force user and group ownership to match the source
-    chown ( (stat _)[4], (stat _)[5], $dst) || warn "$dst: Failed to chown: $!\n";
+    chown ( (stat _)[4], (stat _)[5], $dst) or warn "$dst: Failed to chown: $!\n";
     # Force timestamp to match the source.
-    utime($when_src, $when_src, $dst) || warn "$dst: Failed to utime: $!\n";
+    utime $when_src, $when_src, $dst or warn "$dst: Failed to utime: $!\n";
+    $self->_op(4) if $self->{_gentle_percent};
     return;
   }
 
@@ -227,11 +305,12 @@ sub _dirsync {
     # The source does not exist
     # The destination must also not exist
     print "$dst: Removing\n" if $self->{verbose};
-    if ( rmtree($dst) ) {
-      push @{ $self->{_tracking}{removed} }, $dst;
+    $0 = "$self->{proctitle} - removing: $dst" if $self->{proctitle};
+    if ( $self->rmtree($dst) ) {
+      push @{ $self->{_tracking}->{removed} }, $dst if $self->{_tracking};
     } else {
-      push @{ $self->{_tracking}{failed} }, $dst;
-      warn "$dst: Failed to rmtree: $!\n";
+      push @{ $self->{_tracking}->{failed} }, $dst if $self->{_tracking};
+      warn "$dst: Failed to rmtree!\n";
     }
     return;
   }
@@ -242,30 +321,33 @@ sub _dirsync {
     if (-l $dst) {
       # Dest is a symlink
       print "$dst: Removing symlink\n" if $self->{verbose};
-      unlink($dst) || warn "$dst: Failed to remove symlink: $!\n";
+      unlink $dst or warn "$dst: Failed to remove symlink: $!\n";
+      $self->_op if $self->{_gentle_percent};
     }
     if (-f $dst) {
       # Dest is a plain file
       # It must be wiped
       print "$dst: Removing file\n" if $self->{verbose};
       if ( unlink($dst) ) {
-        push @{ $self->{_tracking}{removed} }, $dst;
+        push @{ $self->{_tracking}->{removed} }, $dst if $self->{_tracking};
       } else {
-        push @{ $self->{_tracking}{failed} }, $dst;
-        warn "$dst: Failed to remove file: $!\n";
+        push @{ $self->{_tracking}->{failed} }, $dst if $self->{_tracking};
+        warn "$dst: Failed to unlink file: $!\n";
       }
+      $self->_op if $self->{_gentle_percent};
     }
     if (!-d $dst) {
-      if ( mkdir($dst, 0755) ) {
-        push @{ $self->{_tracking}{updated} }, $dst;
+      if ( mkdir $dst, 0755 ) {
+        push @{ $self->{_tracking}->{updated} }, $dst if $self->{_tracking};
       } else {
-        push @{ $self->{_tracking}{failed} }, $dst;
-        warn "$dst: Failed to create: $!\n";
+        push @{ $self->{_tracking}->{failed} }, $dst if $self->{_tracking};
+        warn "$dst: Failed to mkdir: $!\n";
       }
+      $self->_op if $self->{_gentle_percent};
     }
-    if (!-d $dst) {
-      warn "$dst: Destination directory cannot exist?!!!\n";
-    }
+    -d $dst or warn "$dst: Destination directory cannot exist?\n";
+    $self->_op(4) if $self->{_gentle_percent};
+
     # If nocache() was not specified, then it is okay
     # skip this directory if the timestamps match.
     if (!$self->{nocache}) {
@@ -276,7 +358,7 @@ sub _dirsync {
       # entire descent.
       if ( defined ( $when_src && $when_dst) &&
            $when_src == $when_dst ) {
-        push @{ $self->{_tracking}{skipped} }, $dst;
+        push @{ $self->{_tracking}->{skipped} }, $dst if $self->{_tracking};
         return;
       }
     }
@@ -292,6 +374,7 @@ sub _dirsync {
     my ($handle, $node, %nodes);
 
     $handle = do { local *FH; };
+    $0 = "$self->{proctitle} - src: $src" if $self->{proctitle};
     return unless opendir($handle, $src);
     while (defined ($node = readdir($handle))) {
       next if $node =~ /^\.\.?$/;
@@ -300,10 +383,12 @@ sub _dirsync {
                !-l "$src/$node" &&
                -d _);
       $nodes{$node} = 1;
+      $self->_op if $self->{_gentle_percent};
     }
     closedir($handle);
 
     $handle = do { local *FH; };
+    $0 = "$self->{proctitle} - dst: $dst" if $self->{proctitle};
     return unless opendir($handle, $dst);
     while (defined ($node = readdir($handle))) {
       next if $node =~ /^\.\.?$/;
@@ -312,9 +397,11 @@ sub _dirsync {
                !-l "$src/$node" &&
                -d _);
       $nodes{$node} = 1;
+      $self->_op if $self->{_gentle_percent};
     }
     closedir($handle);
 
+    $0 = "$self->{proctitle} - syncing: $src => $dst" if $self->{proctitle};
     # %nodes is now a union set of all nodes
     # in both the source and destination.
     # Recursively call myself for each node.
@@ -322,11 +409,12 @@ sub _dirsync {
       $self->_dirsync("$src/$node", "$dst/$node");
     }
     # Force permissions to match the source
-    chmod( (stat $src)[2] & 0777, $dst) || warn "$dst: Failed to chmod: $!\n";
+    chmod( (stat $src)[2] & 0777, $dst) or warn "$dst: Failed to chmod: $!\n";
     # Force user and group ownership to match the source
-    chown ( (stat $src)[4], (stat _)[5], $dst) || warn "$dst: Failed to chown: $!\n";
+    chown( (stat $src)[4], (stat _)[5], $dst) or warn "$dst: Failed to chown: $!\n";
     # Force timestamp to match the source.
-    utime($when_src, $when_src, $dst) || warn "$dst: Failed to utime: $!\n";
+    utime $when_src, $when_src, $dst or warn "$dst: Failed to utime: $!\n";
+    $self->_op(5) if $self->{_gentle_percent};
     return;
   }
 
@@ -400,25 +488,123 @@ sub nocache {
 sub entries_updated {
   my $self = shift;
   return () unless ( ref $self->{_tracking} eq 'HASH' );
-  return @{ $self->{_tracking}{updated} };
+  return @{ $self->{_tracking}->{updated} };
 }
 
 sub entries_removed {
   my $self = shift;
   return () unless ( ref $self->{_tracking} eq 'HASH' );
-  return @{ $self->{_tracking}{removed} };
+  return @{ $self->{_tracking}->{removed} };
 }
 
 sub entries_skipped {
   my $self = shift;
   return () unless ( ref $self->{_tracking} eq 'HASH' );
-  return @{ $self->{_tracking}{skipped} };
+  return @{ $self->{_tracking}->{skipped} };
 }
 
 sub entries_failed {
   my $self = shift;
   return () unless ( ref $self->{_tracking} eq 'HASH' );
-  return @{ $self->{_tracking}{failed} };
+  return @{ $self->{_tracking}->{failed} };
+}
+
+sub rmtree {
+  my $self = shift;
+  my $restore = {};
+  foreach my $node (@_) {
+    $self->_op if $self->{_gentle_percent};
+    my (undef,undef,$mode) = lstat $node;
+    if (-d _) {
+      my @files = ();
+      if (opendir my $d, $node) {
+        @files = readdir $d;
+        closedir $d;
+      } else {
+        unless ($mode & 0200) {
+          # Make directory writable
+          chmod 0777, $node or warn "$node: Failed to chmod: $!\n";
+          $self->_op(2) if $self->{_gentle_percent};
+          # Try to opendir one last time
+          if (opendir my $d, $node) {
+            @files = readdir $d;
+            closedir $d;
+          } else {
+            warn "$node: Failed to opendir: $!\n";
+          }
+        }
+      }
+      $self->rmtree( map { "$node/$_" } grep !/^\.\.?$/, @files );
+      rmdir $node;
+      $self->_op(3 + scalar(@files)) if $self->{_gentle_percent};
+    } else {
+      if (!unlink $node and lstat $node) {
+        # Tried to unlink it but it still exists
+        my $dir = $node;
+        $dir =~ s%[^/]*$%.%;
+        my (undef,undef, $dmode) = lstat $dir;
+        unless ($dmode & 0200) {
+          # Make directory writable
+          chmod 0777, $dir or warn "$dir: Failed to chmod: $!\n";
+          $self->_op if $self->{_gentle_percent};
+        }
+        # Try one last time to remove
+        unlink $node or warn "$node: Failed to unlink: $!\n";
+        $self->_op(4) if $self->{_gentle_percent};
+        # Don't forget to restore this guy back to how he was
+        $restore->{$dir} = $dmode & 07777 unless exists $restore->{$dir};
+      } else {
+        $self->_op if $self->{_gentle_percent};
+      }
+    }
+  }
+  foreach my $dir (keys %{ $restore }) {
+    chmod $restore->{$dir}, $dir;
+  }
+  $self->_op(1 + scalar(keys %{ $restore }) ) if $self->{_gentle_percent};
+  return $_[0] && !lstat $_[0];
+}
+
+# Create copy of $src as $dst in one atomic operation.
+# (The $dst file will never be partial.)
+sub copy {
+  my $self = shift;
+  my $src = shift;
+  my $dst = shift;
+  my $temp_dst = $dst;
+  $temp_dst =~ s%/([^/]+)$%/.\#$1.dirsync.tmp%;
+  my $ops = 0;
+  my $errno = 0;
+  $ops++;
+  if (sysopen FROM, $src, O_RDONLY) {
+    $ops++;
+    if (sysopen TO, $temp_dst, O_WRONLY | O_CREAT | O_EXCL, 0600) {
+      my $buffer;
+      while ($ops++ and sysread(FROM, $buffer, BUFSIZE)) {
+        if ($ops++ and !syswrite(TO, $buffer, length $buffer)) {
+          $errno = $!;
+          last;
+        }
+      }
+      $ops++;
+      close TO;
+    } else {
+      $errno = $!;
+    }
+    $ops++;
+    close FROM;
+  } else {
+    $errno = $!;
+  }
+  $ops++;
+  # Make sure never to block until after the entire file has been copied regardless of how big the file is.
+  $self->{_gentle_ops} += $ops if $self->{_gentle_percent};
+  if ($errno) {
+    unlink $temp_dst;
+    $! = $errno;
+    return undef;
+  }
+  return rename $temp_dst, $dst;
 }
 
 1;
@@ -428,7 +614,7 @@ __END__
 
 File::DirSync - Syncronize two directories rapidly
 
-$Id: DirSync.pm,v 1.27 2006/04/18 23:55:42 rob Exp $
+$Id: DirSync.pm,v 1.37 2007/08/04 07:29:56 rob Exp $
 
 =head1 SYNOPSIS
 
@@ -633,6 +819,43 @@ If enabled, it will significantly degrade the performance
 of the mirroring process.  The default is 0 - assume that
 rebuild() has already rebuilt the source cache.
 
+=head2 gentle( [ <percent> [, <ops> ] ] )
+
+Specify gentleness for all disk operations.
+This is useful for those servers with very busy disk drives
+and you need to slow down the sync process in order to allow
+other processes the io slices they demand.
+The <percent> is the realtime percentage of time you wish to
+be sleeping instead of doing anything on the hard drive,
+i.e., a low value (1) will spend most of the time working
+and a high value (99) will spend most of the time sleeping.
+The <ops> is the number of disk operations you wish to
+perform in between each sleep interval.
+
+  $dirsync->gentle( 25, 1_000 );
+
+If gentle is called without arguments, then some default
+"nice" values are set.
+If gentle is not called at all, then it will process all disk
+operations at full blast without sleeping at all.
+
+=head2 proctitle( [ procname ] )
+
+Enable proctitle mode which shows the current operation on the
+process title.  If procname is specified, then it shows that
+string in the "ps" listing.  Otherwise, the current $0 is used.
+This is mostly for progress tracking for convenience purposes.
+
+  $dirsync->proctitle( "SYNCING" );
+
+Default is not to alter the process title at all.
+
+=head2 tracking( [ <0_or_1> ] )
+
+Enable or disable tracking mode.  Operation tracking is disabled
+by default in order to reduce CPU and memory consumption.
+See entries_* methods below for more details.
+
 =head2 entries_updated()
 
 Returns an array of all directories and files updated in the last
@@ -722,7 +945,7 @@ Rob Brown, bbb@cpan.org
 
 =head1 COPYRIGHT
 
-Copyright (C) 2002-2003, Rob Brown, bbb@cpan.org
+Copyright (C) 2002-2007, Rob Brown, bbb@cpan.org
 
 All rights reserved.
 
