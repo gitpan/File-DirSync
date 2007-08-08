@@ -6,7 +6,7 @@ use Fcntl qw(O_CREAT O_RDONLY O_WRONLY O_EXCL);
 use Carp qw(croak);
 
 use vars qw( $VERSION @ISA $PROC );
-$VERSION = '1.18';
+$VERSION = '1.20';
 @ISA = qw(Exporter);
 $PROC = join " ", $0, @ARGV;
 
@@ -67,19 +67,18 @@ sub _op {
   my $self = shift;
   if (($self->{_gentle_ops} += (shift || 1) ) >= $self->{_gentle_maxops}) {
     # Reached maximum operations
-    my $now = time();
-    my $elapsed = $now - $self->{_gentle_started};
+    my $elapsed = time - $self->{_gentle_started};
     if ($elapsed < GENTLE_CHEWMINTIME and
         $self->{_gentle_maxops} < GENTLE_OPS_MAX) {
       $self->{_gentle_maxops} += int ($self->{_gentle_maxops} * GENTLE_CHEWINCFACTOR);
       $self->{_gentle_maxops} = GENTLE_OPS_MAX if $self->{_gentle_maxops} > GENTLE_OPS_MAX;
     }
-    $self->{_gentle_started} = $now;
     my $delay = int ($elapsed / (100/$self->{_gentle_percent} - 1)) || 1;
     my $prevproc = $0;
     $0 = "$self->{proctitle} - [$self->{_gentle_percent}% gentle on $self->{_gentle_maxops} ops]: SLEEPING $delay UNTIL: ".scalar(localtime (time() + $delay)) if $self->{proctitle};
     sleep $delay;
     $0 = $prevproc;
+    $self->{_gentle_started} = time;
     $self->{_gentle_ops} = 0;
   }
   return 1;
@@ -625,7 +624,7 @@ __END__
 
 File::DirSync - Syncronize two directories rapidly
 
-$Id: DirSync.pm,v 1.43 2007/08/08 19:54:43 rob Exp $
+$Id: DirSync.pm,v 1.46 2007/08/08 21:06:42 rob Exp $
 
 =head1 SYNOPSIS
 
