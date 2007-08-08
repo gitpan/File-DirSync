@@ -6,7 +6,7 @@ use Fcntl qw(O_CREAT O_RDONLY O_WRONLY O_EXCL);
 use Carp qw(croak);
 
 use vars qw( $VERSION @ISA $PROC );
-$VERSION = '1.16';
+$VERSION = '1.17';
 @ISA = qw(Exporter);
 $PROC = join " ", $0, @ARGV;
 
@@ -19,9 +19,14 @@ use constant GENTLE_PERCENT_MIN     =>  0;
 use constant GENTLE_PERCENT_MAX     => 99;
 
 # Disk Operations to run without sleeping
-use constant GENTLE_OPS_DEFAULT => 10_000;
-use constant GENTLE_OPS_MIN     => 10;
-use constant GENTLE_OPS_MAX     => 2_000_000;
+use constant GENTLE_OPS_DEFAULT     => 1_000;
+use constant GENTLE_OPS_MIN         => 10;
+use constant GENTLE_OPS_MAX         => 20_000_000;
+
+# Automatically increase maxops by GENTLE_CHEWINCFACTOR
+# whenever realtime spent syncing is under GENTLE_CHEWMINTIME.
+use constant GENTLE_CHEWINCFACTOR   => 0.25;
+use constant GENTLE_CHEWMINTIME     => 10;
 
 # Number of bytes that can read and write to and from a local file in one syscall
 use constant BUFSIZE => 8192;
@@ -60,16 +65,22 @@ sub gentle {
 
 sub _op {
   my $self = shift;
-  if (($self->{_gentle_ops} += (shift || 1) ) => $self->{_gentle_maxops}) {
+  if (($self->{_gentle_ops} += (shift || 1) ) >= $self->{_gentle_maxops}) {
     # Reached maximum operations
     my $now = time();
     my $elapsed = $now - $self->{_gentle_started};
+    if ($elapsed < GENTLE_CHEWMINTIME and
+        $self->{_gentle_maxops} < GENTLE_OPS_MAX) {
+      $self->{_gentle_maxops} += int ($self->{_gentle_maxops} * GENTLE_CHEWINCFACTOR);
+      $self->{_gentle_maxops} = GENTLE_OPS_MAX if $self->{_gentle_maxops} > GENTLE_OPS_MAX;
+    }
     $self->{_gentle_started} = $now;
     my $delay = int($elapsed * $self->{_gentle_percent} / 100 ) + 1;
     my $prevproc = $0;
-    $0 = "$self->{proctitle} - gentle: SLEEPING $delay SECONDS UNTIL: ".scalar(localtime (time() + $delay));
+    $0 = "$self->{proctitle} - [$self->{_gentle_percent}% gentle on $self->{_gentle_maxops} ops]: SLEEPING $delay" if $self->{proctitle};
     sleep $delay;
     $0 = $prevproc;
+    $self->{_gentle_ops} = 0;
   }
   return 1;
 }
@@ -614,7 +625,7 @@ __END__
 
 File::DirSync - Syncronize two directories rapidly
 
-$Id: DirSync.pm,v 1.37 2007/08/04 07:29:56 rob Exp $
+$Id: DirSync.pm,v 1.40 2007/08/08 17:25:52 rob Exp $
 
 =head1 SYNOPSIS
 

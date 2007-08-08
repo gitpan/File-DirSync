@@ -1,5 +1,8 @@
 Revision history for Perl extension File::DirSync.
 
+1.17  Wed Aug 08 11:40:00 2007
+	- Auto-adjust for more accurate gentle throttling.
+
 1.16  Sat Aug 04 02:00:00 2007
 	- Disable operation tracking by default.
 	- Add a proctitle feature for progress monitioring.
