@@ -1,5 +1,8 @@
 Revision history for Perl extension File::DirSync.
 
+1.18  Wed Aug 08 13:55:00 2007
+	- More accurate gentle throttling computation.
+
 1.17  Wed Aug 08 11:40:00 2007
 	- Auto-adjust for more accurate gentle throttling.
 

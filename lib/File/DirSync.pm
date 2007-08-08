@@ -6,7 +6,7 @@ use Fcntl qw(O_CREAT O_RDONLY O_WRONLY O_EXCL);
 use Carp qw(croak);
 
 use vars qw( $VERSION @ISA $PROC );
-$VERSION = '1.17';
+$VERSION = '1.18';
 @ISA = qw(Exporter);
 $PROC = join " ", $0, @ARGV;
 
@@ -75,9 +75,9 @@ sub _op {
       $self->{_gentle_maxops} = GENTLE_OPS_MAX if $self->{_gentle_maxops} > GENTLE_OPS_MAX;
     }
     $self->{_gentle_started} = $now;
-    my $delay = int($elapsed * $self->{_gentle_percent} / 100 ) + 1;
+    my $delay = int ($elapsed / (100/$self->{_gentle_percent} - 1)) || 1;
     my $prevproc = $0;
-    $0 = "$self->{proctitle} - [$self->{_gentle_percent}% gentle on $self->{_gentle_maxops} ops]: SLEEPING $delay" if $self->{proctitle};
+    $0 = "$self->{proctitle} - [$self->{_gentle_percent}% gentle on $self->{_gentle_maxops} ops]: SLEEPING $delay UNTIL: ".scalar(localtime (time() + $delay)) if $self->{proctitle};
     sleep $delay;
     $0 = $prevproc;
     $self->{_gentle_ops} = 0;
@@ -625,7 +625,7 @@ __END__
 
 File::DirSync - Syncronize two directories rapidly
 
-$Id: DirSync.pm,v 1.40 2007/08/08 17:25:52 rob Exp $
+$Id: DirSync.pm,v 1.43 2007/08/08 19:54:43 rob Exp $
 
 =head1 SYNOPSIS
 
@@ -890,6 +890,18 @@ C<dirsync>, an empty list if it hasn't been run yet.
 
 =head1 TODO
 
+Support for efficient incremental changes to large log files using
+md5 checksum comparison on portions of or all of corresponding
+parts of both the larger source and smaller destination files.
+If no differences are found anywhere, including the very end of the
+destination file, then simply append the end of the source to the
+end of the destination until both files are indentical again.
+Avoid making a full copy of the source and especially avoid
+writing the entire file since writes are so slow and plainful.
+
+Support for hard linking the source files into the destination when
+they both reside on the same device instead of making a full copy.
+
 Generalized file manipulation routines to allow for easier
 integration with third-party file management systems.
 
@@ -899,9 +911,6 @@ Support for Samba style sharing dirsync.
 
 Support for VFS, HTTP/DAV, and other more standard remote
 third-party file management.
-
-Support for skipping dirsync to avoid wiping the entire
-destination directory when the source directory is empty.
 
 Support for dereferencing symlinks instead of creating
 matching symlinks in the destination.

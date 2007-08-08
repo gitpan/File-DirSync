@@ -1,7 +1,7 @@
 NAME
     File::DirSync - Syncronize two directories rapidly
 
-    $Id: DirSync.pm,v 1.40 2007/08/08 17:25:52 rob Exp $
+    $Id: DirSync.pm,v 1.43 2007/08/08 19:54:43 rob Exp $
 
 SYNOPSIS
       use File::DirSync;
@@ -246,6 +246,18 @@ METHODS
     "dirsync", an empty list if it hasn't been run yet.
 
 TODO
+    Support for efficient incremental changes to large log files using md5
+    checksum comparison on portions of or all of corresponding parts of both
+    the larger source and smaller destination files. If no differences are
+    found anywhere, including the very end of the destination file, then
+    simply append the end of the source to the end of the destination until
+    both files are indentical again. Avoid making a full copy of the source
+    and especially avoid writing the entire file since writes are so slow
+    and plainful.
+
+    Support for hard linking the source files into the destination when they
+    both reside on the same device instead of making a full copy.
+
     Generalized file manipulation routines to allow for easier integration
     with third-party file management systems.
 
@@ -255,9 +267,6 @@ TODO
 
     Support for VFS, HTTP/DAV, and other more standard remote third-party
     file management.
-
-    Support for skipping dirsync to avoid wiping the entire destination
-    directory when the source directory is empty.
 
     Support for dereferencing symlinks instead of creating matching symlinks
     in the destination.
