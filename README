@@ -1,7 +1,7 @@
 NAME
     File::DirSync - Syncronize two directories rapidly
 
-    $Id: DirSync.pm,v 1.46 2007/08/08 21:06:42 rob Exp $
+    $Id: DirSync.pm,v 1.50 2007/08/10 02:43:57 rob Exp $
 
 SYNOPSIS
       use File::DirSync;

@@ -1,5 +1,11 @@
 Revision history for Perl extension File::DirSync.
 
+1.21  Thu Aug 09 22:00:00 2007
+	- Tweak minimum thresholds for autoincrease
+	  in order to provide more granular throttling.
+	- Fix initial gentle_ops boundary checking.
+	- Clear up a few warnings.
+
 1.20  Wed Aug 08 15:05:00 2007
 	- Stable release
 	- Just bug fixes from v1.16.

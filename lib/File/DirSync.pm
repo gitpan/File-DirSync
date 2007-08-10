@@ -6,7 +6,7 @@ use Fcntl qw(O_CREAT O_RDONLY O_WRONLY O_EXCL);
 use Carp qw(croak);
 
 use vars qw( $VERSION @ISA $PROC );
-$VERSION = '1.20';
+$VERSION = '1.21';
 @ISA = qw(Exporter);
 $PROC = join " ", $0, @ARGV;
 
@@ -24,9 +24,11 @@ use constant GENTLE_OPS_MIN         => 10;
 use constant GENTLE_OPS_MAX         => 20_000_000;
 
 # Automatically increase maxops by GENTLE_CHEWINCFACTOR
-# whenever realtime spent syncing is under GENTLE_CHEWMINTIME.
+# whenever realtime spent syncing is under GENTLE_CHEWMINTIME
+# or sleeptime is under GENTLE_SLEEPMINTIME.
 use constant GENTLE_CHEWINCFACTOR   => 0.25;
-use constant GENTLE_CHEWMINTIME     => 10;
+use constant GENTLE_CHEWMINTIME     => 2;
+use constant GENTLE_SLEEPMINTIME    => 2;
 
 # Number of bytes that can read and write to and from a local file in one syscall
 use constant BUFSIZE => 8192;
@@ -54,8 +56,8 @@ sub gentle {
   $self->{_gentle_percent} = GENTLE_PERCENT_MAX if $self->{_gentle_percent} > GENTLE_PERCENT_MAX;
 
   $self->{_gentle_maxops} = shift || GENTLE_OPS_DEFAULT;
-  $self->{_gentle_maxops} = GENTLE_OPS_MIN if $self->{_gentle_percent} < GENTLE_OPS_MIN;
-  $self->{_gentle_maxops} = GENTLE_OPS_MAX if $self->{_gentle_percent} > GENTLE_OPS_MAX;
+  $self->{_gentle_maxops} = GENTLE_OPS_MIN if $self->{_gentle_maxops} < GENTLE_OPS_MIN;
+  $self->{_gentle_maxops} = GENTLE_OPS_MAX if $self->{_gentle_maxops} > GENTLE_OPS_MAX;
 
   $self->{_gentle_started} = time;
   $self->{_gentle_ops} = 0;
@@ -68,12 +70,13 @@ sub _op {
   if (($self->{_gentle_ops} += (shift || 1) ) >= $self->{_gentle_maxops}) {
     # Reached maximum operations
     my $elapsed = time - $self->{_gentle_started};
-    if ($elapsed < GENTLE_CHEWMINTIME and
-        $self->{_gentle_maxops} < GENTLE_OPS_MAX) {
+    my $delay = int ($elapsed / (100/$self->{_gentle_percent} - 1)) || 1;
+    if ($self->{_gentle_maxops} < GENTLE_OPS_MAX and
+        $elapsed < GENTLE_CHEWMINTIME ||
+        $delay < GENTLE_SLEEPMINTIME) {
       $self->{_gentle_maxops} += int ($self->{_gentle_maxops} * GENTLE_CHEWINCFACTOR);
       $self->{_gentle_maxops} = GENTLE_OPS_MAX if $self->{_gentle_maxops} > GENTLE_OPS_MAX;
     }
-    my $delay = int ($elapsed / (100/$self->{_gentle_percent} - 1)) || 1;
     my $prevproc = $0;
     $0 = "$self->{proctitle} - [$self->{_gentle_percent}% gentle on $self->{_gentle_maxops} ops]: SLEEPING $delay UNTIL: ".scalar(localtime (time() + $delay)) if $self->{proctitle};
     sleep $delay;
@@ -218,8 +221,9 @@ sub _dirsync {
   $self->_op(2) if $self->{_gentle_percent};
   my $when_dst = (lstat $dst)[9];
   my $size_dst = -s _;
-  my $when_src = (lstat $src)[9];
-  my $size_src = -s _;
+  my @stat_src = lstat $src;
+  my $when_src = $stat_src[9];
+  my $size_src = $stat_src[7];
 
   if (HAS_SYMLINKS) {
     # Symlink Check must be first because
@@ -301,9 +305,9 @@ sub _dirsync {
       return;
     }
     # Force permissions to match the source
-    chmod( (stat $src)[2] & 0777, $dst) or warn "$dst: Failed to chmod: $!\n";
+    chmod( $stat_src[2] & 0777, $dst) or warn "$dst: Failed to chmod: $!\n";
     # Force user and group ownership to match the source
-    chown ( (stat _)[4], (stat _)[5], $dst) or warn "$dst: Failed to chown: $!\n";
+    chown( $stat_src[4], $stat_src[5], $dst) or warn "$dst: Failed to chown: $!\n";
     # Force timestamp to match the source.
     utime $when_src, $when_src, $dst or warn "$dst: Failed to utime: $!\n";
     $self->_op(4) if $self->{_gentle_percent};
@@ -419,9 +423,9 @@ sub _dirsync {
       $self->_dirsync("$src/$node", "$dst/$node");
     }
     # Force permissions to match the source
-    chmod( (stat $src)[2] & 0777, $dst) or warn "$dst: Failed to chmod: $!\n";
+    chmod( $stat_src[2] & 0777, $dst) or warn "$dst: Failed to chmod: $!\n";
     # Force user and group ownership to match the source
-    chown( (stat $src)[4], (stat _)[5], $dst) or warn "$dst: Failed to chown: $!\n";
+    chown( $stat_src[4], $stat_src[5], $dst) or warn "$dst: Failed to chown: $!\n";
     # Force timestamp to match the source.
     utime $when_src, $when_src, $dst or warn "$dst: Failed to utime: $!\n";
     $self->_op(5) if $self->{_gentle_percent};
@@ -624,7 +628,7 @@ __END__
 
 File::DirSync - Syncronize two directories rapidly
 
-$Id: DirSync.pm,v 1.46 2007/08/08 21:06:42 rob Exp $
+$Id: DirSync.pm,v 1.50 2007/08/10 02:43:57 rob Exp $
 
 =head1 SYNOPSIS
 
