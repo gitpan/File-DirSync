@@ -6,7 +6,7 @@ use Fcntl qw(O_CREAT O_RDONLY O_WRONLY O_EXCL);
 use Carp qw(croak);
 
 use vars qw( $VERSION @ISA $PROC );
-$VERSION = '1.21';
+$VERSION = '1.22';
 @ISA = qw(Exporter);
 $PROC = join " ", $0, @ARGV;
 
@@ -29,9 +29,17 @@ use constant GENTLE_OPS_MAX         => 20_000_000;
 use constant GENTLE_CHEWINCFACTOR   => 0.25;
 use constant GENTLE_CHEWMINTIME     => 2;
 use constant GENTLE_SLEEPMINTIME    => 2;
+use constant GENTLE_SLEEPMAXTIME    => 600;
 
 # Number of bytes that can read and write to and from a local file in one syscall
 use constant BUFSIZE => 8192;
+
+# Number of bytes written to consider as one "disk op"
+use constant BLKSIZE => 1024;
+
+# Number of ops to be considered for each iteration during a file copy.
+# (This counts both the read and write ops for the buffer.)
+use constant BUFFER_OPS => BUFSIZE / BLKSIZE * 2;
 
 sub new {
   my $class = shift;
@@ -76,6 +84,9 @@ sub _op {
         $delay < GENTLE_SLEEPMINTIME) {
       $self->{_gentle_maxops} += int ($self->{_gentle_maxops} * GENTLE_CHEWINCFACTOR);
       $self->{_gentle_maxops} = GENTLE_OPS_MAX if $self->{_gentle_maxops} > GENTLE_OPS_MAX;
+    } elsif ($delay > GENTLE_SLEEPMAXTIME) {
+      $self->{_gentle_maxops} -= int ($self->{_gentle_maxops} * GENTLE_CHEWINCFACTOR);
+      $delay = GENTLE_SLEEPMAXTIME;
     }
     my $prevproc = $0;
     $0 = "$self->{proctitle} - [$self->{_gentle_percent}% gentle on $self->{_gentle_maxops} ops]: SLEEPING $delay UNTIL: ".scalar(localtime (time() + $delay)) if $self->{proctitle};
@@ -587,38 +598,37 @@ sub copy {
   my $dst = shift;
   my $temp_dst = $dst;
   $temp_dst =~ s%/([^/]+)$%/.\#$1.dirsync.tmp%;
-  my $ops = 0;
   my $errno = 0;
-  $ops++;
   if (sysopen FROM, $src, O_RDONLY) {
-    $ops++;
     if (sysopen TO, $temp_dst, O_WRONLY | O_CREAT | O_EXCL, 0600) {
       my $buffer;
-      while ($ops++ and sysread(FROM, $buffer, BUFSIZE)) {
-        if ($ops++ and !syswrite(TO, $buffer, length $buffer)) {
+      while (sysread(FROM, $buffer, BUFSIZE)) {
+        $self->_op(BUFFER_OPS) if $self->{_gentle_percent};
+        if (!syswrite(TO, $buffer, length $buffer)) {
           $errno = $!;
           last;
         }
       }
-      $ops++;
       close TO;
     } else {
       $errno = $!;
     }
-    $ops++;
     close FROM;
   } else {
     $errno = $!;
   }
-  $ops++;
-  # Make sure never to block until after the entire file has been copied regardless of how big the file is.
-  $self->{_gentle_ops} += $ops if $self->{_gentle_percent};
+  # XXX - Should we consider this operation as many thousands of ops?
+  # XXX - Depending on fs type, such as reiserfs, could this grind?
+  if (!$errno and !rename $temp_dst, $dst) {
+    $errno = $!;
+  }
+  $self->_op(6) if $self->{_gentle_percent};
   if ($errno) {
     unlink $temp_dst;
     $! = $errno;
     return undef;
   }
-  return rename $temp_dst, $dst;
+  return 1;
 }
 
 1;
@@ -628,7 +638,7 @@ __END__
 
 File::DirSync - Syncronize two directories rapidly
 
-$Id: DirSync.pm,v 1.50 2007/08/10 02:43:57 rob Exp $
+$Id: DirSync.pm,v 1.53 2007/08/20 14:34:44 rob Exp $
 
 =head1 SYNOPSIS
 
@@ -898,7 +908,7 @@ md5 checksum comparison on portions of or all of corresponding
 parts of both the larger source and smaller destination files.
 If no differences are found anywhere, including the very end of the
 destination file, then simply append the end of the source to the
-end of the destination until both files are indentical again.
+end of the destination until both files are identical again.
 Avoid making a full copy of the source and especially avoid
 writing the entire file since writes are so slow and plainful.
 

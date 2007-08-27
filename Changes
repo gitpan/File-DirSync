@@ -1,5 +1,10 @@
 Revision history for Perl extension File::DirSync.
 
+1.22  Wed Aug 15 15:30:00 2007
+	- Allow gentleness to pause even right in the
+	  middle of a chewing copy since that can be
+	  very painful to the drive.
+
 1.21  Thu Aug 09 22:00:00 2007
 	- Tweak minimum thresholds for autoincrease
 	  in order to provide more granular throttling.
